@@ -1,10 +1,30 @@
-from typing import TypedDict, Optional
+from typing import Any, NotRequired, Required, TypedDict
+
+from schemas.panel_schema import CadExecutionResult, PanelRequest
 
 
-class AgentState(TypedDict):
-    # 用户输入
-    user_input: str
-    # AI解析后的结构参数
-    structure_json: Optional[dict]
-    # CAD执行结果
-    cad_result: Optional[str]
+class AgentState(TypedDict, total=False):
+    """LangGraph 节点之间共享的状态。"""
+
+    # 每次调用图时必须提供的用户原始输入
+    user_input: Required[str]
+
+    # LLM 返回的原始文本，用于诊断 JSON 输出问题
+    llm_raw_output: NotRequired[str | None]
+
+    # 兼容当前 parse -> cad 流程的解析字典。
+    # 下一步增加校验节点后，由该字段生成 panel_request。
+    structure_json: NotRequired[dict[str, Any] | None]
+
+    # 只有通过 PanelRequest 校验的数据才允许进入标准化 CAD 工具
+    panel_request: NotRequired[PanelRequest | None]
+
+    # 当前 Mock 工具仍返回 str；工具标准化后统一为 CadExecutionResult。
+    cad_result: NotRequired[CadExecutionResult | str | None]
+
+    # 流程异常与用户澄清信息
+    error: NotRequired[str | None]
+    clarification: NotRequired[str | None]
+
+    # 为后续 JSON 修复或模型重试预留
+    retry_count: NotRequired[int]
