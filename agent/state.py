@@ -1,6 +1,7 @@
 from typing import Any, NotRequired, Required, TypedDict
 
 from schemas.panel_schema import CadExecutionResult, PanelRequest
+from schemas.reference_plane_schema import ReferencePlaneResolution
 
 
 class AgentState(TypedDict, total=False):
@@ -18,6 +19,9 @@ class AgentState(TypedDict, total=False):
 
     # 只有通过 PanelRequest 校验的数据才允许进入标准化 CAD 工具
     panel_request: NotRequired[PanelRequest | None]
+
+    # 用户定位表达式在当前工程标尺目录中的解析结果
+    reference_plane_resolution: NotRequired[ReferencePlaneResolution | None]
 
     # 当前 Mock 工具仍返回 str；工具标准化后统一为 CadExecutionResult。
     cad_result: NotRequired[CadExecutionResult | str | None]

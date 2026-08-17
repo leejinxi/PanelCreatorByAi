@@ -1,0 +1,106 @@
+import unittest
+
+from schemas.reference_plane_schema import ReferencePlaneRecord
+from tools.reference_plane_tools import resolve_reference_plane
+
+
+class ReferencePlaneResolverTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.planes = [
+            ReferencePlaneRecord(
+                object_id="plane-a",
+                name="DATUM_ALPHA",
+                aliases=["A区基准", "Alpha Datum"],
+                axis="X",
+                coordinate_mm=10000,
+            ),
+            ReferencePlaneRecord(
+                object_id="plane-b",
+                name="SURFACE_20",
+                aliases=["20号曲面"],
+                axis="Z",
+                coordinate_mm=2000,
+            ),
+        ]
+
+    def test_resolves_arbitrary_project_name_from_user_input(self) -> None:
+        result = resolve_reference_plane(
+            user_input="以DATUM_ALPHA为定位面创建板架",
+            planes=self.planes,
+        )
+
+        self.assertEqual(result.status, "resolved")
+        self.assertEqual(result.resolved.object_id, "plane-a")
+
+    def test_resolves_project_alias_from_user_input(self) -> None:
+        result = resolve_reference_plane(
+            user_input="以A区基准为定位面创建板架",
+            planes=self.planes,
+        )
+
+        self.assertEqual(result.status, "resolved")
+        self.assertEqual(result.resolved.name, "DATUM_ALPHA")
+
+    def test_resolves_coordinate_with_unit_conversion(self) -> None:
+        result = resolve_reference_plane(
+            user_input="在X=10m的位置创建板架",
+            planes=self.planes,
+        )
+
+        self.assertEqual(result.status, "resolved")
+        self.assertEqual(result.resolved.name, "DATUM_ALPHA")
+
+    def test_uses_llm_reference_as_fallback(self) -> None:
+        result = resolve_reference_plane(
+            user_input="在指定曲面创建板架",
+            planes=self.planes,
+            llm_reference="SURFACE_20",
+        )
+
+        self.assertEqual(result.status, "resolved")
+        self.assertEqual(result.resolved.object_id, "plane-b")
+
+    def test_reports_ambiguous_alias(self) -> None:
+        planes = [
+            ReferencePlaneRecord(
+                object_id="plane-a",
+                name="DATUM_A",
+                aliases=["公共基准"],
+            ),
+            ReferencePlaneRecord(
+                object_id="plane-b",
+                name="DATUM_B",
+                aliases=["公共基准"],
+            ),
+        ]
+
+        result = resolve_reference_plane(
+            user_input="以公共基准为定位面",
+            planes=planes,
+        )
+
+        self.assertEqual(result.status, "ambiguous")
+        self.assertEqual(len(result.candidates), 2)
+
+    def test_reports_name_coordinate_conflict(self) -> None:
+        result = resolve_reference_plane(
+            user_input="以SURFACE_20为定位面，位置X=10000",
+            planes=self.planes,
+        )
+
+        self.assertEqual(result.status, "conflict")
+        self.assertEqual(len(result.candidates), 2)
+
+    def test_reports_unknown_plane(self) -> None:
+        result = resolve_reference_plane(
+            user_input="在一个不存在的面创建板架",
+            planes=self.planes,
+            llm_reference="UNKNOWN_PLANE",
+        )
+
+        self.assertEqual(result.status, "not_found")
+        self.assertIsNone(result.resolved)
+
+
+if __name__ == "__main__":
+    unittest.main()

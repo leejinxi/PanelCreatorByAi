@@ -8,6 +8,10 @@ from agent.state import AgentState
 from llm.qwen_client import LocalQwen
 from schemas.panel_schema import PanelRequest
 from tools.cad_tools import create_panel
+from tools.reference_plane_tools import (
+    list_reference_planes,
+    resolve_reference_plane,
+)
 
 
 llm = LocalQwen()
@@ -20,31 +24,32 @@ llm = LocalQwen()
 
 def parse_structure(state: AgentState) -> dict:
     prompt = f"""
-你是船舶 CAD 结构设计助手。
+你是船舶 CAD 结构参数抽取助手。
 
 用户需求：
 {state['user_input']}
 
-请解析为板架创建参数，只返回合法 JSON，不要解释，也不要使用 Markdown：
+请从用户原文中提取板架创建参数，只返回合法 JSON，不要解释，也不要使用 Markdown：
 {{
     "type": "panel",
-    "reference_plane": "",
+    "reference_plane": null,
     "boundaries": {{
         "top": null,
         "bottom": null,
         "left": null,
         "right": null
     }},
-    "thickness": 0,
-    "material": ""
+    "thickness": null,
+    "material": null
 }}
 
 要求：
 1. thickness 使用毫米数值。
 2. 无法确定的边界填写 null。
-3. 不得虚构 reference_plane、thickness 或 material。
-4. 无法确定的必填字符串填写空字符串。
-5. 无法确定 thickness 时填写 0。
+3. reference_plane 可以是 FR100、SURFACE_20、主甲板中心面等任意工程名称。
+4. 用户明确提供的定位面原文必须完整复制到 reference_plane，不要自行改名。
+5. 如果用户使用 X=10000 等坐标定位，也保留原始表达式到 reference_plane。
+6. 不得虚构 reference_plane、thickness 或 material，无法确定时填写 null。
 """
 
     try:
@@ -64,7 +69,7 @@ def parse_structure(state: AgentState) -> dict:
 
 # =====================
 # Node 2
-# JSON解析与Schema校验
+# JSON解析与基础字段校验
 # =====================
 
 def validate_structure(state: AgentState) -> dict:
@@ -89,7 +94,12 @@ def validate_structure(state: AgentState) -> dict:
             "error": "模型返回的 JSON 必须是对象。",
         }
 
-    missing_fields = _find_missing_required_fields(data)
+    # 定位面可能被小模型漏提取，后续 resolve_plane 会直接从用户原文和
+    # 当前工程目录中做确定性解析，因此这里仅拦截其他必填参数。
+    missing_fields = _find_missing_required_fields(
+        data,
+        include_reference_plane=False,
+    )
     if missing_fields:
         return {
             "structure_json": data,
@@ -100,31 +110,27 @@ def validate_structure(state: AgentState) -> dict:
             "error": None,
         }
 
-    try:
-        panel_request = PanelRequest.model_validate(data)
-    except ValidationError as exc:
-        return {
-            "structure_json": data,
-            "error": (
-                "板架参数校验失败："
-                f"{_format_validation_error(exc)}"
-            ),
-        }
-
     return {
         "structure_json": data,
-        "panel_request": panel_request,
         "clarification": None,
         "error": None,
     }
 
 
-def _find_missing_required_fields(data: dict) -> list[str]:
+def _find_missing_required_fields(
+    data: dict,
+    *,
+    include_reference_plane: bool = True,
+) -> list[str]:
     field_labels = {
-        "reference_plane": "基准面",
         "thickness": "厚度",
         "material": "材料",
     }
+    if include_reference_plane:
+        field_labels = {
+            "reference_plane": "定位面",
+            **field_labels,
+        }
     missing_fields = []
 
     for field_name, label in field_labels.items():
@@ -135,6 +141,77 @@ def _find_missing_required_fields(data: dict) -> list[str]:
             missing_fields.append(label)
 
     return missing_fields
+
+
+# =====================
+# Node 3
+# 当前工程定位面解析
+# =====================
+
+def resolve_plane(state: AgentState) -> dict:
+    if state.get("error") or state.get("clarification"):
+        return {}
+
+    data = state.get("structure_json")
+    if not data:
+        return {
+            "error": "没有可用于定位面解析的板架参数。",
+        }
+
+    llm_reference = data.get("reference_plane")
+    if not isinstance(llm_reference, str):
+        llm_reference = None
+
+    planes = list_reference_planes()
+    resolution = resolve_reference_plane(
+        user_input=state["user_input"],
+        planes=planes,
+        llm_reference=llm_reference,
+    )
+
+    if resolution.status != "resolved" or resolution.resolved is None:
+        candidate_names = [
+            plane.name
+            for plane in resolution.candidates
+        ]
+        candidate_text = (
+            f" 候选项：{'、'.join(candidate_names)}。"
+            if candidate_names
+            else ""
+        )
+        return {
+            "reference_plane_resolution": resolution,
+            "clarification": (
+                f"{resolution.message or '无法确定定位面。'}"
+                f"{candidate_text}"
+            ),
+            "error": None,
+        }
+
+    resolved_data = {
+        **data,
+        "reference_plane": resolution.resolved.name,
+    }
+
+    try:
+        panel_request = PanelRequest.model_validate(resolved_data)
+    except ValidationError as exc:
+        return {
+            "structure_json": resolved_data,
+            "reference_plane_resolution": resolution,
+            "error": (
+                "板架参数校验失败："
+                f"{_format_validation_error(exc)}"
+            ),
+        }
+
+    return {
+        "structure_json": resolved_data,
+        "reference_plane_resolution": resolution,
+        "panel_request": panel_request,
+        "clarification": None,
+        "error": None,
+    }
 
 
 def _format_validation_error(error: ValidationError) -> str:
@@ -148,7 +225,7 @@ def _format_validation_error(error: ValidationError) -> str:
 
 
 # =====================
-# Node 3
+# Node 4
 # CAD创建
 # =====================
 
@@ -156,7 +233,7 @@ def execute_cad(state: AgentState) -> dict:
     panel_request = state.get("panel_request")
     if panel_request is None:
         return {
-            "error": "没有通过校验的板架参数，无法执行 CAD。",
+            "error": "没有通过校验的板架参数，无法执行。",
         }
 
     try:
@@ -168,7 +245,7 @@ def execute_cad(state: AgentState) -> dict:
         )
     except Exception as exc:
         return {
-            "error": f"CAD 创建板架失败：{exc}",
+            "error": f"创建板架失败：{exc}",
         }
 
     return {
@@ -183,17 +260,23 @@ def execute_cad(state: AgentState) -> dict:
 
 def route_after_validation(
     state: AgentState,
-) -> Literal["cad", "finish"]:
+) -> Literal["resolve_plane", "finish"]:
     if state.get("error"):
         return "finish"
 
     if state.get("clarification"):
         return "finish"
 
-    if state.get("panel_request") is None:
+    return "resolve_plane"
+
+
+def route_after_plane_resolution(
+    state: AgentState,
+) -> Literal["cad", "finish"]:
+    if state.get("error") or state.get("clarification"):
         return "finish"
 
-    return "cad"
+    return "cad" if state.get("panel_request") is not None else "finish"
 
 
 # =====================
@@ -204,6 +287,7 @@ builder = StateGraph(AgentState)
 
 builder.add_node("parse", parse_structure)
 builder.add_node("validate", validate_structure)
+builder.add_node("resolve_plane", resolve_plane)
 builder.add_node("cad", execute_cad)
 
 builder.set_entry_point("parse")
@@ -211,6 +295,14 @@ builder.add_edge("parse", "validate")
 builder.add_conditional_edges(
     "validate",
     route_after_validation,
+    {
+        "resolve_plane": "resolve_plane",
+        "finish": END,
+    },
+)
+builder.add_conditional_edges(
+    "resolve_plane",
+    route_after_plane_resolution,
     {
         "cad": "cad",
         "finish": END,
