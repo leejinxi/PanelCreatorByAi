@@ -1,0 +1,4 @@
+langchain-core==1.5.4
+langgraph==1.2.11
+pydantic==2.13.4
+requests==2.34.2

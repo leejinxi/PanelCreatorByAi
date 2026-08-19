@@ -54,27 +54,30 @@ class CreatePanelToolTests(unittest.TestCase):
         self.assertEqual(backend.received.reference_plane, "FR100")
 
     def test_preserves_expected_backend_error_code(self) -> None:
-        result = CreatePanelTool(ExpectedFailureBackend()).invoke(
-            make_panel_request()
-        )
+        with self.assertLogs("tools.cad_tools", level="WARNING"):
+            result = CreatePanelTool(ExpectedFailureBackend()).invoke(
+                make_panel_request()
+            )
 
         self.assertFalse(result.success)
         self.assertEqual(result.message, "CAD 服务不可用")
         self.assertEqual(result.error_code, "CAD_UNAVAILABLE")
 
     def test_hides_unexpected_backend_exception_details(self) -> None:
-        result = CreatePanelTool(UnexpectedFailureBackend()).invoke(
-            make_panel_request()
-        )
+        with self.assertLogs("tools.cad_tools", level="ERROR"):
+            result = CreatePanelTool(UnexpectedFailureBackend()).invoke(
+                make_panel_request()
+            )
 
         self.assertFalse(result.success)
         self.assertEqual(result.error_code, "CAD_INTERNAL_ERROR")
         self.assertNotIn("sensitive", result.message)
 
     def test_rejects_empty_backend_object_id(self) -> None:
-        result = CreatePanelTool(EmptyObjectIdBackend()).invoke(
-            make_panel_request()
-        )
+        with self.assertLogs("tools.cad_tools", level="WARNING"):
+            result = CreatePanelTool(EmptyObjectIdBackend()).invoke(
+                make_panel_request()
+            )
 
         self.assertFalse(result.success)
         self.assertEqual(result.error_code, "CAD_INVALID_RESPONSE")

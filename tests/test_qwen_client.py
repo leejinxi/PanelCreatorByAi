@@ -68,6 +68,25 @@ class LocalQwenTests(unittest.TestCase):
         self.assertTrue(context.exception.retryable)
 
     @patch("llm.qwen_client.requests.post")
+    def test_client_http_error_is_not_retryable(
+        self,
+        mocked_post: Mock,
+    ) -> None:
+        raw_response = requests.Response()
+        raw_response.status_code = 400
+        response = Mock()
+        response.raise_for_status.side_effect = requests.HTTPError(
+            response=raw_response,
+        )
+        mocked_post.return_value = response
+
+        with self.assertRaises(LocalQwenError) as context:
+            self.client._call("prompt")
+
+        self.assertEqual(context.exception.error_code, "LLM_HTTP_ERROR")
+        self.assertFalse(context.exception.retryable)
+
+    @patch("llm.qwen_client.requests.post")
     def test_rejects_response_without_content(self, mocked_post: Mock) -> None:
         response = Mock()
         response.raise_for_status.return_value = None
@@ -80,6 +99,21 @@ class LocalQwenTests(unittest.TestCase):
         self.assertEqual(
             context.exception.error_code,
             "LLM_INVALID_RESPONSE",
+        )
+
+    @patch("llm.qwen_client.requests.post")
+    def test_rejects_blank_message_content(self, mocked_post: Mock) -> None:
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"message": {"content": "   "}}
+        mocked_post.return_value = response
+
+        with self.assertRaises(LocalQwenError) as context:
+            self.client._call("prompt")
+
+        self.assertEqual(
+            context.exception.error_code,
+            "LLM_EMPTY_RESPONSE",
         )
 
 

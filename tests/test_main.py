@@ -143,6 +143,45 @@ class AgentMainTests(unittest.TestCase):
         self.assertEqual(exit_code, 130)
         self.assertIn("已取消", stdout.getvalue())
 
+    def test_interactive_session_stops_at_clarification_limit(self) -> None:
+        with (
+            patch("builtins.input", side_effect=["创建板架", "仍然不知道"]),
+            patch.object(
+                main_module,
+                "run_panel_agent",
+                return_value={
+                    "clarification": "请提供厚度和材料。",
+                    "error": None,
+                },
+            ) as mocked_run,
+            redirect_stdout(StringIO()) as stdout,
+        ):
+            exit_code = main_module.run_interactive_session(
+                max_clarification_rounds=2,
+            )
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(mocked_run.call_count, 2)
+        self.assertIn("最大补充次数", stdout.getvalue())
+
+    def test_interactive_session_reports_eof_during_supplement(self) -> None:
+        with (
+            patch("builtins.input", side_effect=["创建板架", EOFError]),
+            patch.object(
+                main_module,
+                "run_panel_agent",
+                return_value={
+                    "clarification": "请提供材料。",
+                    "error": None,
+                },
+            ),
+            redirect_stdout(StringIO()) as stdout,
+        ):
+            exit_code = main_module.main([])
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("补充信息", stdout.getvalue())
+
     def test_main_accepts_command_line_request(self) -> None:
         success = CadExecutionResult(
             success=True,
