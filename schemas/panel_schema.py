@@ -34,7 +34,11 @@ class PanelRequest(BaseModel):
 
     # default_factory=PanelBoundaries 表示没有提供边界时，每次创建一个新的空边界对象
     boundaries: PanelBoundaries = Field(default_factory=PanelBoundaries)
-    thickness: float = Field(gt=0, description="板架厚度，单位为 mm") # greater than(gt) 0
+    thickness: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="板架厚度，单位为 mm",
+    )
     material: str
 
     # 对reference_plane和material禁止空字符串

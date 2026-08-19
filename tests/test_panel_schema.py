@@ -1,4 +1,5 @@
 import unittest
+from math import inf
 
 from pydantic import ValidationError
 
@@ -32,7 +33,7 @@ class PanelRequestTests(unittest.TestCase):
         self.assertIsNone(request.boundaries.bottom)
 
     def test_rejects_non_positive_thickness(self) -> None:
-        for thickness in (0, -1):
+        for thickness in (0, -1, inf):
             with self.subTest(thickness=thickness):
                 with self.assertRaises(ValidationError):
                     PanelRequest(

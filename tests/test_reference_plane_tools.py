@@ -1,6 +1,11 @@
 import unittest
 
-from schemas.reference_plane_schema import ReferencePlaneRecord
+from pydantic import ValidationError
+
+from schemas.reference_plane_schema import (
+    ReferencePlaneRecord,
+    ReferencePlaneResolution,
+)
 from tools.reference_plane_tools import resolve_reference_plane
 
 
@@ -100,6 +105,35 @@ class ReferencePlaneResolverTests(unittest.TestCase):
 
         self.assertEqual(result.status, "not_found")
         self.assertIsNone(result.resolved)
+
+    def test_rejects_negative_coordinate_tolerance(self) -> None:
+        with self.assertRaisesRegex(ValueError, "容差"):
+            resolve_reference_plane(
+                user_input="在X=10000的位置创建板架",
+                planes=self.planes,
+                tolerance_mm=-0.1,
+            )
+
+    def test_normalizes_record_aliases_and_coordinate_system(self) -> None:
+        plane = ReferencePlaneRecord(
+            object_id="plane-c",
+            name="DATUM_C",
+            aliases=[" 别名 ", "别名", "  "],
+            coordinate_system=" Global ",
+        )
+
+        self.assertEqual(plane.aliases, ["别名"])
+        self.assertEqual(plane.coordinate_system, "Global")
+
+    def test_rejects_inconsistent_resolution_payload(self) -> None:
+        with self.assertRaises(ValidationError):
+            ReferencePlaneResolution(status="resolved")
+
+        with self.assertRaises(ValidationError):
+            ReferencePlaneResolution(
+                status="ambiguous",
+                candidates=[self.planes[0]],
+            )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import re
+from math import isfinite
 from collections.abc import Sequence
 
 from schemas.reference_plane_schema import (
@@ -115,6 +116,9 @@ def resolve_reference_plane(
     tolerance_mm: float = 0.1,
 ) -> ReferencePlaneResolution:
     """综合坐标、工程名称/别名和 LLM 结果解析真实定位面。"""
+
+    if not isfinite(tolerance_mm) or tolerance_mm < 0:
+        raise ValueError("坐标匹配容差必须是有限的非负数")
 
     coordinate_selector = extract_coordinate_selector(user_input, planes)
     name_selector = extract_catalog_name_selector(user_input, planes)
