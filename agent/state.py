@@ -31,6 +31,8 @@ class AgentState(TypedDict, total=False):
 
     # 流程异常与用户澄清信息
     error: NotRequired[str | None]
+    error_code: NotRequired[str | None]
+    retryable_error: NotRequired[bool]
     clarification: NotRequired[str | None]
     final_response: NotRequired[str | None]
 

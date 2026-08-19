@@ -38,6 +38,20 @@ class AgentMainTests(unittest.TestCase):
         self.assertIn("创建成功", output)
         self.assertIn("PANEL-001", output)
 
+    def test_formats_success_without_optional_object_id(self) -> None:
+        output = main_module.format_agent_result(
+            {
+                "cad_result": CadExecutionResult(
+                    success=True,
+                    message="Panel created successfully",
+                )
+            }
+        )
+
+        self.assertIn("创建成功", output)
+        self.assertNotIn("None", output)
+        self.assertNotIn("对象 ID", output)
+
     def test_formats_clarification(self) -> None:
         output = main_module.format_agent_result(
             {"clarification": "请提供材料。"}
@@ -118,6 +132,16 @@ class AgentMainTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         mocked_run.assert_called_once()
         self.assertIn("已退出", stdout.getvalue())
+
+    def test_interactive_session_handles_keyboard_interrupt(self) -> None:
+        with (
+            patch("builtins.input", side_effect=KeyboardInterrupt),
+            redirect_stdout(StringIO()) as stdout,
+        ):
+            exit_code = main_module.main([])
+
+        self.assertEqual(exit_code, 130)
+        self.assertIn("已取消", stdout.getvalue())
 
     def test_main_accepts_command_line_request(self) -> None:
         success = CadExecutionResult(

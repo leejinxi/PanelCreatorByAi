@@ -206,6 +206,7 @@ class AgentGraphTests(unittest.TestCase):
 
         self.assertEqual(result["cad_result"], failure)
         self.assertEqual(result["error"], "CAD 服务不可用")
+        self.assertEqual(result["error_code"], "CAD_UNAVAILABLE")
 
     def test_non_positive_thickness_stops_before_cad(self) -> None:
         output = create_panel_output(
@@ -236,7 +237,39 @@ class AgentGraphTests(unittest.TestCase):
             result = self.invoke_with_model_output("not-json")
 
         self.assertIn("JSON 格式不正确", result["error"])
+        self.assertEqual(result["error_code"], "LLM_INVALID_JSON")
+        self.assertEqual(result["retry_count"], 2)
         mocked_create_panel.assert_not_called()
+
+    def test_invalid_json_is_retried_once_and_can_recover(self) -> None:
+        repaired_output = create_panel_output(
+            {
+                "type": "panel",
+                "reference_plane": "FR100",
+                "boundaries": {},
+                "thickness": 14,
+                "material": "AH36",
+            }
+        )
+
+        with (
+            patch.object(
+                type(graph_module.llm),
+                "invoke",
+                side_effect=["not-json", repaired_output],
+            ) as mocked_invoke,
+            patch.object(
+                graph_module,
+                "create_panel",
+                return_value=SUCCESS_RESULT,
+            ) as mocked_create_panel,
+        ):
+            result = graph_module.graph.invoke({"user_input": "创建板架"})
+
+        self.assertEqual(mocked_invoke.call_count, 2)
+        self.assertEqual(result["retry_count"], 1)
+        self.assertIsNone(result["error"])
+        mocked_create_panel.assert_called_once()
 
     def test_non_creation_request_does_not_call_cad(self) -> None:
         output = json.dumps(

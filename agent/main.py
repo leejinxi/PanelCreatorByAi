@@ -43,10 +43,10 @@ def format_agent_result(result: dict[str, Any]) -> str:
     cad_result = result.get("cad_result")
     if isinstance(cad_result, CadExecutionResult):
         if cad_result.success:
-            return (
-                f"创建成功：{cad_result.message}\n"
-                f"CAD 对象 ID：{cad_result.object_id}"
-            )
+            lines = [f"创建成功：{cad_result.message}"]
+            if cad_result.object_id:
+                lines.append(f"CAD 对象 ID：{cad_result.object_id}")
+            return "\n".join(lines)
 
         return (
             f"创建失败：{cad_result.message}\n"
@@ -85,8 +85,12 @@ def run_interactive_session(
         try:
             user_input = input(prompt).strip()
         except EOFError:
-            print("执行失败：没有读取到板架创建需求。")
+            target = "补充信息" if user_turns else "板架创建需求"
+            print(f"执行失败：没有读取到{target}。")
             return 2
+        except KeyboardInterrupt:
+            print("\n已取消板架创建会话。")
+            return 130
 
         if user_input.casefold() in EXIT_COMMANDS:
             print("已退出板架创建会话，未执行新的 CAD 操作。")

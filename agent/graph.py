@@ -5,7 +5,7 @@ from langgraph.graph import END, StateGraph
 from pydantic import ValidationError
 
 from agent.state import AgentState
-from llm.qwen_client import LocalQwen
+from llm.qwen_client import LocalQwen, LocalQwenError
 from schemas.agent_action_schema import AgentActionPlan
 from schemas.panel_schema import PanelRequest
 from tools.cad_tools import create_panel
@@ -16,6 +16,7 @@ from tools.reference_plane_tools import (
 
 
 llm = LocalQwen()
+MAX_MODEL_RETRIES = 1
 
 
 # =====================
@@ -65,17 +66,40 @@ def parse_structure(state: AgentState) -> dict:
 7. 不得虚构 reference_plane、thickness 或 material，无法确定时填写 null。
 """
 
+    retry_count = state.get("retry_count", 0)
+    if retry_count:
+        prompt += f"""
+
+上一次输出没有通过结构校验，请根据错误修正后重新输出完整 JSON。
+上一次输出：
+{state.get('llm_raw_output')}
+校验错误：
+{state.get('error')}
+"""
+
     try:
         result = llm.invoke(prompt)
+    except LocalQwenError as exc:
+        return {
+            "error": f"本地模型调用失败：{exc}",
+            "error_code": exc.error_code,
+            "retryable_error": exc.retryable,
+            "retry_count": state.get("retry_count", 0) + 1,
+            "llm_raw_output": None,
+        }
     except Exception as exc:
         return {
             "error": f"本地模型调用失败：{exc}",
+            "error_code": "LLM_INTERNAL_ERROR",
+            "retryable_error": False,
             "llm_raw_output": None,
         }
 
     return {
         "llm_raw_output": result,
         "error": None,
+        "error_code": None,
+        "retryable_error": False,
         "clarification": None,
     }
 
@@ -98,24 +122,30 @@ def validate_structure(state: AgentState) -> dict:
     try:
         data = json.loads(raw_output)
     except (json.JSONDecodeError, TypeError) as exc:
-        return {
-            "error": f"模型返回的 JSON 格式不正确：{exc}",
-        }
+        return _model_output_error(
+            state,
+            f"模型返回的 JSON 格式不正确：{exc}",
+            error_code="LLM_INVALID_JSON",
+        )
 
     if not isinstance(data, dict):
-        return {
-            "error": "模型返回的 JSON 必须是对象。",
-        }
+        return _model_output_error(
+            state,
+            "模型返回的 JSON 必须是对象。",
+            error_code="LLM_INVALID_JSON",
+        )
 
     try:
         action_plan = AgentActionPlan.model_validate(data)
     except ValidationError as exc:
-        return {
-            "error": (
+        return _model_output_error(
+            state,
+            (
                 "模型返回的动作计划不合法："
                 f"{_format_validation_error(exc)}"
             ),
-        }
+            error_code="LLM_INVALID_ACTION",
+        )
 
     if action_plan.action == "unsupported":
         return {
@@ -124,6 +154,8 @@ def validate_structure(state: AgentState) -> dict:
             "final_response": "当前仅支持创建板架，未执行任何 CAD 操作。",
             "clarification": None,
             "error": None,
+            "error_code": None,
+            "retryable_error": False,
         }
 
     data = action_plan.panel.model_dump()
@@ -143,6 +175,8 @@ def validate_structure(state: AgentState) -> dict:
                 f"{'、'.join(missing_fields)}。"
             ),
             "error": None,
+            "error_code": None,
+            "retryable_error": False,
         }
 
     return {
@@ -150,6 +184,22 @@ def validate_structure(state: AgentState) -> dict:
         "structure_json": data,
         "clarification": None,
         "error": None,
+        "error_code": None,
+        "retryable_error": False,
+    }
+
+
+def _model_output_error(
+    state: AgentState,
+    message: str,
+    *,
+    error_code: str,
+) -> dict:
+    return {
+        "error": message,
+        "error_code": error_code,
+        "retryable_error": True,
+        "retry_count": state.get("retry_count", 0) + 1,
     }
 
 
@@ -277,6 +327,7 @@ def execute_cad(state: AgentState) -> dict:
     return {
         "cad_result": result,
         "error": None if result.success else result.message,
+        "error_code": None if result.success else result.error_code,
     }
 
 
@@ -286,7 +337,13 @@ def execute_cad(state: AgentState) -> dict:
 
 def route_after_validation(
     state: AgentState,
-) -> Literal["resolve_plane", "finish"]:
+) -> Literal["retry_parse", "resolve_plane", "finish"]:
+    if (
+        state.get("retryable_error")
+        and state.get("retry_count", 0) <= MAX_MODEL_RETRIES
+    ):
+        return "retry_parse"
+
     if state.get("error"):
         return "finish"
 
@@ -326,6 +383,7 @@ builder.add_conditional_edges(
     "validate",
     route_after_validation,
     {
+        "retry_parse": "parse",
         "resolve_plane": "resolve_plane",
         "finish": END,
     },
