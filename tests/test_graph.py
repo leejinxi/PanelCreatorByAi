@@ -3,10 +3,20 @@ import json
 import unittest
 from unittest.mock import patch
 
-from schemas.panel_schema import PanelRequest
+from schemas.panel_schema import (
+    CadExecutionResult,
+    PanelRequest,
+)
 
 
 graph_module = importlib.import_module("agent.graph")
+
+
+SUCCESS_RESULT = CadExecutionResult(
+    success=True,
+    message="Panel created successfully",
+    object_id="PANEL-001",
+)
 
 
 class AgentGraphTests(unittest.TestCase):
@@ -34,7 +44,7 @@ class AgentGraphTests(unittest.TestCase):
             patch.object(
                 graph_module,
                 "create_panel",
-                return_value="Panel created successfully",
+                return_value=SUCCESS_RESULT,
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
@@ -42,19 +52,12 @@ class AgentGraphTests(unittest.TestCase):
             )
 
         self.assertIsInstance(result["panel_request"], PanelRequest)
-        self.assertEqual(result["cad_result"], "Panel created successfully")
+        self.assertEqual(result["cad_result"], SUCCESS_RESULT)
         self.assertIsNone(result["error"])
-        mocked_create_panel.assert_called_once_with(
-            reference_plane="FR100",
-            boundaries={
-                "top": None,
-                "bottom": None,
-                "left": None,
-                "right": None,
-            },
-            thickness=14.0,
-            material="AH36",
-        )
+        panel = mocked_create_panel.call_args.args[0]
+        self.assertIsInstance(panel, PanelRequest)
+        self.assertEqual(panel.reference_plane, "FR100")
+        self.assertEqual(panel.thickness, 14.0)
 
     def test_recovers_fr100_from_user_input_when_llm_misses_it(self) -> None:
         output = json.dumps(
@@ -72,7 +75,7 @@ class AgentGraphTests(unittest.TestCase):
             patch.object(
                 graph_module,
                 "create_panel",
-                return_value="Panel created successfully",
+                return_value=SUCCESS_RESULT,
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
@@ -81,8 +84,8 @@ class AgentGraphTests(unittest.TestCase):
 
         self.assertEqual(result["panel_request"].reference_plane, "FR100")
         self.assertEqual(
-            result["reference_plane_resolution"].resolved.object_id,
-            "mock-plane-fr100",
+            result["reference_plane_resolution"].resolved.name,
+            "FR100",
         )
         mocked_create_panel.assert_called_once()
 
@@ -102,7 +105,7 @@ class AgentGraphTests(unittest.TestCase):
             patch.object(
                 graph_module,
                 "create_panel",
-                return_value="Panel created successfully",
+                return_value=SUCCESS_RESULT,
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
@@ -128,7 +131,7 @@ class AgentGraphTests(unittest.TestCase):
             patch.object(
                 graph_module,
                 "create_panel",
-                return_value="Panel created successfully",
+                return_value=SUCCESS_RESULT,
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
@@ -165,6 +168,35 @@ class AgentGraphTests(unittest.TestCase):
         self.assertIn("材料", result["clarification"])
         self.assertNotIn("panel_request", result)
         mocked_create_panel.assert_not_called()
+
+    def test_cad_failure_is_preserved_as_structured_result(self) -> None:
+        output = json.dumps(
+            {
+                "type": "panel",
+                "reference_plane": "FR100",
+                "boundaries": {},
+                "thickness": 14,
+                "material": "AH36",
+            }
+        )
+        failure = CadExecutionResult(
+            success=False,
+            message="CAD 服务不可用",
+            error_code="CAD_UNAVAILABLE",
+        )
+
+        with (
+            patch.object(type(graph_module.llm), "invoke", return_value=output),
+            patch.object(
+                graph_module,
+                "create_panel",
+                return_value=failure,
+            ),
+        ):
+            result = graph_module.graph.invoke({"user_input": "创建板架"})
+
+        self.assertEqual(result["cad_result"], failure)
+        self.assertEqual(result["error"], "CAD 服务不可用")
 
     def test_non_positive_thickness_stops_before_cad(self) -> None:
         output = json.dumps(

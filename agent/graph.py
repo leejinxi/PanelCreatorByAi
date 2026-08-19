@@ -236,21 +236,11 @@ def execute_cad(state: AgentState) -> dict:
             "error": "没有通过校验的板架参数，无法执行。",
         }
 
-    try:
-        result = create_panel(
-            reference_plane=panel_request.reference_plane,
-            boundaries=panel_request.boundaries.model_dump(),
-            thickness=panel_request.thickness,
-            material=panel_request.material,
-        )
-    except Exception as exc:
-        return {
-            "error": f"创建板架失败：{exc}",
-        }
+    result = create_panel(panel_request)
 
     return {
         "cad_result": result,
-        "error": None,
+        "error": None if result.success else result.message,
     }
 
 

@@ -13,14 +13,12 @@ class ReferencePlaneResolverTests(unittest.TestCase):
     def setUp(self) -> None:
         self.planes = [
             ReferencePlaneRecord(
-                object_id="plane-a",
                 name="DATUM_ALPHA",
                 aliases=["A区基准", "Alpha Datum"],
                 axis="X",
                 coordinate_mm=10000,
             ),
             ReferencePlaneRecord(
-                object_id="plane-b",
                 name="SURFACE_20",
                 aliases=["20号曲面"],
                 axis="Z",
@@ -35,7 +33,7 @@ class ReferencePlaneResolverTests(unittest.TestCase):
         )
 
         self.assertEqual(result.status, "resolved")
-        self.assertEqual(result.resolved.object_id, "plane-a")
+        self.assertEqual(result.resolved.name, "DATUM_ALPHA")
 
     def test_resolves_project_alias_from_user_input(self) -> None:
         result = resolve_reference_plane(
@@ -63,17 +61,15 @@ class ReferencePlaneResolverTests(unittest.TestCase):
         )
 
         self.assertEqual(result.status, "resolved")
-        self.assertEqual(result.resolved.object_id, "plane-b")
+        self.assertEqual(result.resolved.name, "SURFACE_20")
 
     def test_reports_ambiguous_alias(self) -> None:
         planes = [
             ReferencePlaneRecord(
-                object_id="plane-a",
                 name="DATUM_A",
                 aliases=["公共基准"],
             ),
             ReferencePlaneRecord(
-                object_id="plane-b",
                 name="DATUM_B",
                 aliases=["公共基准"],
             ),
@@ -116,7 +112,6 @@ class ReferencePlaneResolverTests(unittest.TestCase):
 
     def test_normalizes_record_aliases_and_coordinate_system(self) -> None:
         plane = ReferencePlaneRecord(
-            object_id="plane-c",
             name="DATUM_C",
             aliases=[" 别名 ", "别名", "  "],
             coordinate_system=" Global ",

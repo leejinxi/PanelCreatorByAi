@@ -90,6 +90,22 @@ class CadExecutionResultTests(unittest.TestCase):
         self.assertEqual(result.object_id, "PANEL-001")
         self.assertIsNone(result.error_code)
 
+    def test_rejects_inconsistent_failure_result(self) -> None:
+        with self.assertRaises(ValidationError):
+            CadExecutionResult(
+                success=False,
+                message="创建失败",
+            )
+
+        with self.assertRaises(ValidationError):
+            CadExecutionResult(
+                success=False,
+                message="创建失败",
+                object_id="PANEL-001",
+                error_code="CAD_ERROR",
+            )
+
+
 
 if __name__ == "__main__":
     unittest.main()

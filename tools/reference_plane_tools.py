@@ -25,19 +25,16 @@ def list_reference_planes() -> list[ReferencePlaneRecord]:
 
     return [
         ReferencePlaneRecord(
-            object_id="mock-plane-fr100",
             name="FR100",
             aliases=["FR 100", "第100肋位", "100号肋位"],
             axis="X",
             coordinate_mm=10000,
         ),
         ReferencePlaneRecord(
-            object_id="mock-plane-surface-20",
             name="SURFACE_20",
             aliases=["SURFACE 20", "20号曲面"],
         ),
         ReferencePlaneRecord(
-            object_id="mock-plane-centerline",
             name="CENTERLINE",
             aliases=["中心纵剖面", "中纵面"],
             axis="Y",
@@ -130,7 +127,7 @@ def resolve_reference_plane(
             tolerance_mm,
         )
         name_matches = _match_by_name(name_selector.name, planes)
-        shared = _intersection_by_object_id(coordinate_matches, name_matches)
+        shared = _intersection_by_name(coordinate_matches, name_matches)
 
         if len(shared) == 1:
             return _resolved(coordinate_selector, shared[0])
@@ -242,24 +239,29 @@ def _resolved(
     )
 
 
-def _intersection_by_object_id(
+def _intersection_by_name(
     left: Sequence[ReferencePlaneRecord],
     right: Sequence[ReferencePlaneRecord],
 ) -> list[ReferencePlaneRecord]:
-    right_ids = {plane.object_id for plane in right}
-    return [plane for plane in left if plane.object_id in right_ids]
+    right_names = {normalize_plane_text(plane.name) for plane in right}
+    return [
+        plane
+        for plane in left
+        if normalize_plane_text(plane.name) in right_names
+    ]
 
 
 def _unique_planes(
     planes: Sequence[ReferencePlaneRecord],
 ) -> list[ReferencePlaneRecord]:
     result = []
-    seen_ids = set()
+    seen_names = set()
 
     for plane in planes:
-        if plane.object_id not in seen_ids:
+        normalized_name = normalize_plane_text(plane.name)
+        if normalized_name not in seen_names:
             result.append(plane)
-            seen_ids.add(plane.object_id)
+            seen_names.add(normalized_name)
 
     return result
 

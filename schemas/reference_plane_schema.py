@@ -82,14 +82,13 @@ class ReferencePlaneRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    object_id: str
     name: str
     aliases: list[str] = Field(default_factory=list)
     axis: str | None = None
     coordinate_mm: float | None = Field(default=None, allow_inf_nan=False)
     coordinate_system: str | None = None
 
-    @field_validator("object_id", "name")
+    @field_validator("name")
     @classmethod
     def validate_required_text(cls, value: str) -> str:
         normalized = value.strip()

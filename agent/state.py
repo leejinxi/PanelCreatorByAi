@@ -23,8 +23,8 @@ class AgentState(TypedDict, total=False):
     # 用户定位表达式在当前工程标尺目录中的解析结果
     reference_plane_resolution: NotRequired[ReferencePlaneResolution | None]
 
-    # 当前 Mock 工具仍返回 str；工具标准化后统一为 CadExecutionResult。
-    cad_result: NotRequired[CadExecutionResult | str | None]
+    # 标准化 CAD 工具的结构化执行结果
+    cad_result: NotRequired[CadExecutionResult | None]
 
     # 流程异常与用户澄清信息
     error: NotRequired[str | None]
