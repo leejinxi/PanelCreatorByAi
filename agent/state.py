@@ -1,5 +1,6 @@
 from typing import Any, NotRequired, Required, TypedDict
 
+from schemas.agent_action_schema import AgentActionPlan
 from schemas.panel_schema import CadExecutionResult, PanelRequest
 from schemas.reference_plane_schema import ReferencePlaneResolution
 
@@ -13,8 +14,10 @@ class AgentState(TypedDict, total=False):
     # LLM 返回的原始文本，用于诊断 JSON 输出问题
     llm_raw_output: NotRequired[str | None]
 
-    # 兼容当前 parse -> cad 流程的解析字典。
-    # 下一步增加校验节点后，由该字段生成 panel_request。
+    # 模型选择的结构化动作；当前支持创建板架或明确拒绝未知任务
+    action_plan: NotRequired[AgentActionPlan | None]
+
+    # create_panel 动作中的候选参数字典；后续生成 panel_request
     structure_json: NotRequired[dict[str, Any] | None]
 
     # 只有通过 PanelRequest 校验的数据才允许进入标准化 CAD 工具
@@ -29,6 +32,7 @@ class AgentState(TypedDict, total=False):
     # 流程异常与用户澄清信息
     error: NotRequired[str | None]
     clarification: NotRequired[str | None]
+    final_response: NotRequired[str | None]
 
     # 为后续 JSON 修复或模型重试预留
     retry_count: NotRequired[int]

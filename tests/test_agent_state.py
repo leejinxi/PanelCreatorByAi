@@ -2,6 +2,7 @@ import unittest
 from typing import get_type_hints
 
 from agent.state import AgentState
+from schemas.agent_action_schema import AgentActionPlan
 from schemas.panel_schema import CadExecutionResult, PanelRequest
 
 
@@ -9,6 +10,7 @@ class AgentStateTests(unittest.TestCase):
     def test_user_input_is_the_only_required_field(self) -> None:
         self.assertEqual(AgentState.__required_keys__, frozenset({"user_input"}))
         self.assertIn("panel_request", AgentState.__optional_keys__)
+        self.assertIn("action_plan", AgentState.__optional_keys__)
         self.assertIn("cad_result", AgentState.__optional_keys__)
         self.assertIn("error", AgentState.__optional_keys__)
 
@@ -47,6 +49,7 @@ class AgentStateTests(unittest.TestCase):
         hints = get_type_hints(AgentState)
 
         self.assertIn(PanelRequest, hints["panel_request"].__args__)
+        self.assertIn(AgentActionPlan, hints["action_plan"].__args__)
         self.assertIn(CadExecutionResult, hints["cad_result"].__args__)
 
 

@@ -1,3 +1,4 @@
+from schemas.agent_action_schema import AgentActionPlan, PanelCandidate
 from schemas.panel_schema import (
     CadExecutionResult,
     PanelBoundaries,
@@ -13,8 +14,10 @@ from schemas.reference_plane_schema import (
 )
 
 __all__ = [
+    "AgentActionPlan",
     "CadExecutionResult",
     "PanelBoundaries",
+    "PanelCandidate",
     "PanelRequest",
     "PlaneByCoordinate",
     "PlaneByDescription",

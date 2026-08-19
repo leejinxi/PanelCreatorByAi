@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from agent.state import AgentState
 from llm.qwen_client import LocalQwen
+from schemas.agent_action_schema import AgentActionPlan
 from schemas.panel_schema import PanelRequest
 from tools.cad_tools import create_panel
 from tools.reference_plane_tools import (
@@ -29,27 +30,39 @@ def parse_structure(state: AgentState) -> dict:
 用户需求：
 {state['user_input']}
 
-请从用户原文中提取板架创建参数，只返回合法 JSON，不要解释，也不要使用 Markdown：
+请先判断用户是否明确要求创建板架，再返回合法 JSON，不要解释，也不要使用 Markdown。
+
+如果用户明确要求创建板架，返回：
 {{
-    "type": "panel",
-    "reference_plane": null,
-    "boundaries": {{
-        "top": null,
-        "bottom": null,
-        "left": null,
-        "right": null
-    }},
-    "thickness": null,
-    "material": null
+    "action": "create_panel",
+    "panel": {{
+        "type": "panel",
+        "reference_plane": null,
+        "boundaries": {{
+            "top": null,
+            "bottom": null,
+            "left": null,
+            "right": null
+        }},
+        "thickness": null,
+        "material": null
+    }}
+}}
+
+如果用户不是在要求创建板架，例如普通问答、解释材料、创建其他对象或任务不明确，返回：
+{{
+    "action": "unsupported",
+    "panel": null
 }}
 
 要求：
-1. thickness 使用毫米数值。
-2. 无法确定的边界填写 null。
-3. reference_plane 可以是 FR100、SURFACE_20、主甲板中心面等任意工程名称。
-4. 用户明确提供的定位面原文必须完整复制到 reference_plane，不要自行改名。
-5. 如果用户使用 X=10000 等坐标定位，也保留原始表达式到 reference_plane。
-6. 不得虚构 reference_plane、thickness 或 material，无法确定时填写 null。
+1. 只有用户明确表达创建意图时，action 才能是 create_panel。
+2. thickness 使用毫米数值。
+3. 无法确定的边界填写 null。
+4. reference_plane 可以是 FR100、SURFACE_20、主甲板中心面等任意工程名称。
+5. 用户明确提供的定位面原文必须完整复制到 reference_plane，不要自行改名。
+6. 如果用户使用 X=10000 等坐标定位，也保留原始表达式到 reference_plane。
+7. 不得虚构 reference_plane、thickness 或 material，无法确定时填写 null。
 """
 
     try:
@@ -94,6 +107,27 @@ def validate_structure(state: AgentState) -> dict:
             "error": "模型返回的 JSON 必须是对象。",
         }
 
+    try:
+        action_plan = AgentActionPlan.model_validate(data)
+    except ValidationError as exc:
+        return {
+            "error": (
+                "模型返回的动作计划不合法："
+                f"{_format_validation_error(exc)}"
+            ),
+        }
+
+    if action_plan.action == "unsupported":
+        return {
+            "action_plan": action_plan,
+            "structure_json": None,
+            "final_response": "当前仅支持创建板架，未执行任何 CAD 操作。",
+            "clarification": None,
+            "error": None,
+        }
+
+    data = action_plan.panel.model_dump()
+
     # 定位面可能被小模型漏提取，后续 resolve_plane 会直接从用户原文和
     # 当前工程目录中做确定性解析，因此这里仅拦截其他必填参数。
     missing_fields = _find_missing_required_fields(
@@ -102,6 +136,7 @@ def validate_structure(state: AgentState) -> dict:
     )
     if missing_fields:
         return {
+            "action_plan": action_plan,
             "structure_json": data,
             "clarification": (
                 "创建板架还需要提供："
@@ -111,6 +146,7 @@ def validate_structure(state: AgentState) -> dict:
         }
 
     return {
+        "action_plan": action_plan,
         "structure_json": data,
         "clarification": None,
         "error": None,
@@ -255,6 +291,10 @@ def route_after_validation(
         return "finish"
 
     if state.get("clarification"):
+        return "finish"
+
+    action_plan = state.get("action_plan")
+    if action_plan is None or action_plan.action != "create_panel":
         return "finish"
 
     return "resolve_plane"

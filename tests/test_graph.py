@@ -19,6 +19,15 @@ SUCCESS_RESULT = CadExecutionResult(
 )
 
 
+def create_panel_output(panel: dict) -> str:
+    return json.dumps(
+        {
+            "action": "create_panel",
+            "panel": panel,
+        }
+    )
+
+
 class AgentGraphTests(unittest.TestCase):
     def invoke_with_model_output(self, output: str) -> dict:
         with patch.object(type(graph_module.llm), "invoke", return_value=output):
@@ -29,7 +38,7 @@ class AgentGraphTests(unittest.TestCase):
             )
 
     def test_valid_parameters_reach_cad(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": "FR100",
@@ -60,7 +69,7 @@ class AgentGraphTests(unittest.TestCase):
         self.assertEqual(panel.thickness, 14.0)
 
     def test_recovers_fr100_from_user_input_when_llm_misses_it(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": None,
@@ -90,7 +99,7 @@ class AgentGraphTests(unittest.TestCase):
         mocked_create_panel.assert_called_once()
 
     def test_resolves_coordinate_to_project_plane(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": "X=10000",
@@ -116,7 +125,7 @@ class AgentGraphTests(unittest.TestCase):
         mocked_create_panel.assert_called_once()
 
     def test_resolves_surface_name_from_project_catalog(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": None,
@@ -145,7 +154,7 @@ class AgentGraphTests(unittest.TestCase):
         mocked_create_panel.assert_called_once()
 
     def test_missing_material_requests_clarification(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": "FR100",
@@ -170,7 +179,7 @@ class AgentGraphTests(unittest.TestCase):
         mocked_create_panel.assert_not_called()
 
     def test_cad_failure_is_preserved_as_structured_result(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": "FR100",
@@ -199,7 +208,7 @@ class AgentGraphTests(unittest.TestCase):
         self.assertEqual(result["error"], "CAD 服务不可用")
 
     def test_non_positive_thickness_stops_before_cad(self) -> None:
-        output = json.dumps(
+        output = create_panel_output(
             {
                 "type": "panel",
                 "reference_plane": "FR100",
@@ -227,6 +236,36 @@ class AgentGraphTests(unittest.TestCase):
             result = self.invoke_with_model_output("not-json")
 
         self.assertIn("JSON 格式不正确", result["error"])
+        mocked_create_panel.assert_not_called()
+
+    def test_non_creation_request_does_not_call_cad(self) -> None:
+        output = json.dumps(
+            {
+                "action": "unsupported",
+                "panel": None,
+            }
+        )
+
+        with patch.object(graph_module, "create_panel") as mocked_create_panel:
+            result = self.invoke_with_model_output(output)
+
+        self.assertEqual(result["action_plan"].action, "unsupported")
+        self.assertIn("仅支持创建板架", result["final_response"])
+        self.assertNotIn("panel_request", result)
+        mocked_create_panel.assert_not_called()
+
+    def test_invalid_action_plan_does_not_call_cad(self) -> None:
+        output = json.dumps(
+            {
+                "action": "create_panel",
+                "panel": None,
+            }
+        )
+
+        with patch.object(graph_module, "create_panel") as mocked_create_panel:
+            result = self.invoke_with_model_output(output)
+
+        self.assertIn("动作计划不合法", result["error"])
         mocked_create_panel.assert_not_called()
 
     def test_model_exception_becomes_state_error(self) -> None:
