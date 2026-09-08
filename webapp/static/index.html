@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AI Ship CAD Copilot 本地板架创建工作台">
+  <title>AI Ship CAD Copilot</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="AI Ship CAD Copilot">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+        <span class="brand-copy">
+          <strong>AI Ship CAD Copilot</strong>
+          <small>板架创建工作台</small>
+        </span>
+      </div>
+
+      <div class="system-status" aria-label="系统状态">
+        <span class="status-chip" id="agent-status">
+          <i aria-hidden="true"></i>Agent API
+        </span>
+        <span class="status-chip" id="cad-status">
+          <i aria-hidden="true"></i>Mock CAD
+        </span>
+        <span class="mode-badge">DEMO MODE · 模拟执行</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="request-panel" aria-labelledby="request-heading">
+        <div class="section-heading">
+          <span class="eyebrow">01 / COMMAND</span>
+          <h1 id="request-heading">描述要创建的板架</h1>
+          <p>输入定位面、厚度和材料，Agent 将整理参数并提交 CAD。</p>
+        </div>
+
+        <form id="request-form" novalidate>
+          <label for="request-input">创建需求</label>
+          <div class="input-frame">
+            <textarea
+              id="request-input"
+              name="request"
+              rows="6"
+              maxlength="2000"
+              placeholder="例如：请在第100肋位创建一块14mm厚的AH36板架"
+              required
+            ></textarea>
+            <span class="character-count"><b id="character-count">0</b> / 2000</span>
+          </div>
+          <p class="input-error" id="input-error" role="alert"></p>
+
+          <div class="examples" aria-label="示例需求">
+            <span>快速示例</span>
+            <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架">完整创建</button>
+            <button type="button" data-example="请在FR100创建一块14mm厚的板架">缺少材料</button>
+            <button type="button" data-example="请解释AH36是什么材料">能力边界</button>
+          </div>
+
+          <div class="form-actions">
+            <button class="primary-button" id="submit-button" type="submit">
+              <span class="button-label">解析并创建</span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="secondary-button" id="reset-button" type="button">清空</button>
+          </div>
+        </form>
+
+        <div class="session-note" id="session-note" hidden>
+          <span>正在补充上一次需求</span>
+          <button type="button" id="new-session-button">开始新任务</button>
+        </div>
+
+        <footer class="request-footer">
+          <span>标尺面规则</span>
+          <strong>FR -10—200</strong>
+          <strong>SL -40—40</strong>
+          <strong>LV -5—50</strong>
+        </footer>
+      </section>
+
+      <section class="result-panel" aria-labelledby="result-heading">
+        <div class="result-topline">
+          <div>
+            <span class="eyebrow">02 / EXECUTION</span>
+            <h2 id="result-heading">Agent 执行链路</h2>
+          </div>
+          <span class="request-id" id="request-id">REQUEST —</span>
+        </div>
+
+        <ol class="stepper" id="stepper" aria-label="执行进度">
+          <li class="step" data-step="parse">
+            <span class="step-index">01</span>
+            <span><strong>需求解析</strong><small>自然语言 → 参数</small></span>
+          </li>
+          <li class="step" data-step="validate">
+            <span class="step-index">02</span>
+            <span><strong>参数校验</strong><small>Schema validation</small></span>
+          </li>
+          <li class="step" data-step="cad">
+            <span class="step-index">03</span>
+            <span><strong>CAD 创建</strong><small>Mock backend</small></span>
+          </li>
+        </ol>
+
+        <div class="result-grid">
+          <section class="parameter-card" aria-labelledby="parameter-heading">
+            <div class="card-heading">
+              <h3 id="parameter-heading">结构化参数</h3>
+              <span id="parameter-state">等待解析</span>
+            </div>
+
+            <dl class="parameter-list">
+              <div class="parameter-main">
+                <dt>定位面 <small>referenceName</small></dt>
+                <dd id="reference-name">—</dd>
+              </div>
+              <div>
+                <dt>厚度</dt>
+                <dd><span id="thickness">—</span> <small>mm</small></dd>
+              </div>
+              <div>
+                <dt>材料</dt>
+                <dd id="material">—</dd>
+              </div>
+            </dl>
+
+            <div class="boundary-heading">
+              <span>四向边界</span>
+              <small>允许暂时为空</small>
+            </div>
+            <dl class="boundary-grid">
+              <div><dt>TOP</dt><dd id="boundary-top">未指定</dd></div>
+              <div><dt>BOTTOM</dt><dd id="boundary-bottom">未指定</dd></div>
+              <div><dt>LEFT</dt><dd id="boundary-left">未指定</dd></div>
+              <div><dt>RIGHT</dt><dd id="boundary-right">未指定</dd></div>
+            </dl>
+          </section>
+
+          <section class="cad-card" aria-labelledby="cad-preview-heading">
+            <div class="card-heading">
+              <h3 id="cad-preview-heading">板架示意</h3>
+              <span>XZ VIEW</span>
+            </div>
+            <div class="cad-stage">
+              <svg viewBox="0 0 420 250" role="img" aria-label="板架边界与定位面示意图">
+                <defs>
+                  <pattern id="minor-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.18"/>
+                  </pattern>
+                </defs>
+                <rect width="420" height="250" fill="url(#minor-grid)"/>
+                <line class="axis-line" x1="34" y1="218" x2="394" y2="218"/>
+                <line class="axis-line" x1="34" y1="218" x2="34" y2="24"/>
+                <text class="axis-label" x="398" y="222">Y</text>
+                <text class="axis-label" x="28" y="18">Z</text>
+                <rect class="panel-shape" x="105" y="55" width="225" height="125" rx="2"/>
+                <line class="center-line" x1="217.5" y1="38" x2="217.5" y2="198"/>
+                <line class="dimension-line" x1="105" y1="194" x2="330" y2="194"/>
+                <path class="dimension-tick" d="M105 188v12M330 188v12"/>
+                <text class="diagram-label" x="217" y="124" text-anchor="middle">PANEL</text>
+                <text class="diagram-meta" id="diagram-reference" x="217" y="143" text-anchor="middle">REFERENCE —</text>
+              </svg>
+              <span class="cad-coordinate">LOCAL COORDINATE</span>
+            </div>
+          </section>
+        </div>
+
+        <section class="execution-result neutral" id="execution-result" aria-live="polite">
+          <div class="result-icon" id="result-icon" aria-hidden="true">·</div>
+          <div class="result-copy">
+            <span id="result-kicker">等待任务</span>
+            <strong id="result-message">输入板架需求后，执行结果将在这里显示。</strong>
+            <small id="result-meta">Mock CAD 不会修改真实工程。</small>
+          </div>
+          <details class="json-details" id="json-details" hidden>
+            <summary>查看 JSON</summary>
+            <pre id="json-output"></pre>
+          </details>
+        </section>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

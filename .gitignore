@@ -7,6 +7,11 @@
 # 保留任意目录下的 Python 源文件
 !*.py
 
+# 保留本地浏览器工作台的静态资源
+!/webapp/static/*.html
+!/webapp/static/*.css
+!/webapp/static/*.js
+
 # 保留 Doc 目录及其中的全部文件
 !Doc/
 !Doc/**

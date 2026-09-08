@@ -68,7 +68,32 @@ class AgentGraphTests(unittest.TestCase):
         self.assertEqual(panel.reference_plane, "FR100")
         self.assertEqual(panel.thickness, 14.0)
 
-    def test_recovers_fr100_from_user_input_when_llm_misses_it(self) -> None:
+    def test_missing_reference_plane_requests_clarification(self) -> None:
+        output = create_panel_output(
+            {
+                "type": "panel",
+                "reference_plane": None,
+                "boundaries": {},
+                "thickness": 14,
+                "material": "AH36",
+            }
+        )
+
+        with patch.object(graph_module, "create_panel") as mocked_create_panel:
+            with patch.object(
+                type(graph_module.llm),
+                "invoke",
+                return_value=output,
+            ):
+                result = graph_module.graph.invoke(
+                    {"user_input": "请创建一块14mm厚AH36板架"}
+                )
+
+        self.assertIn("定位面", result["clarification"])
+        self.assertNotIn("panel_request", result)
+        mocked_create_panel.assert_not_called()
+
+    def test_recovers_known_ruler_plane_when_model_misses_it(self) -> None:
         output = create_panel_output(
             {
                 "type": "panel",
@@ -88,17 +113,15 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "请在FR100创建一块14mm厚AH36板架"}
+                {"user_input": "请在第100肋位创建14mm厚AH36板架"}
             )
 
         self.assertEqual(result["panel_request"].reference_plane, "FR100")
-        self.assertEqual(
-            result["reference_plane_resolution"].resolved.name,
-            "FR100",
-        )
+        panel = mocked_create_panel.call_args.args[0]
+        self.assertEqual(panel.reference_plane, "FR100")
         mocked_create_panel.assert_called_once()
 
-    def test_resolves_coordinate_to_project_plane(self) -> None:
+    def test_coordinate_reference_is_passed_through(self) -> None:
         output = create_panel_output(
             {
                 "type": "panel",
@@ -121,14 +144,16 @@ class AgentGraphTests(unittest.TestCase):
                 {"user_input": "请在X=10000的位置创建14mm厚AH36板架"}
             )
 
-        self.assertEqual(result["panel_request"].reference_plane, "FR100")
+        self.assertEqual(result["panel_request"].reference_plane, "X=10000")
+        panel = mocked_create_panel.call_args.args[0]
+        self.assertEqual(panel.reference_plane, "X=10000")
         mocked_create_panel.assert_called_once()
 
-    def test_resolves_surface_name_from_project_catalog(self) -> None:
+    def test_chinese_frame_name_is_normalized(self) -> None:
         output = create_panel_output(
             {
                 "type": "panel",
-                "reference_plane": None,
+                "reference_plane": "第100肋位",
                 "boundaries": {},
                 "thickness": 14,
                 "material": "AH36",
@@ -144,13 +169,43 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "以SURFACE_20为定位面创建14mm厚AH36板架"}
+                {"user_input": "请在第100肋位创建14mm厚AH36板架"}
             )
 
         self.assertEqual(
             result["panel_request"].reference_plane,
-            "SURFACE_20",
+            "FR100",
         )
+        panel = mocked_create_panel.call_args.args[0]
+        self.assertEqual(panel.reference_plane, "FR100")
+        mocked_create_panel.assert_called_once()
+
+    def test_unknown_reference_plane_reaches_cad(self) -> None:
+        output = create_panel_output(
+            {
+                "type": "panel",
+                "reference_plane": "UNKNOWN_PLANE_999",
+                "boundaries": {},
+                "thickness": 14,
+                "material": "AH36",
+            }
+        )
+
+        with (
+            patch.object(type(graph_module.llm), "invoke", return_value=output),
+            patch.object(
+                graph_module,
+                "create_panel",
+                return_value=SUCCESS_RESULT,
+            ) as mocked_create_panel,
+        ):
+            result = graph_module.graph.invoke(
+                {"user_input": "在UNKNOWN_PLANE_999创建板架"}
+            )
+
+        self.assertIsNone(result["error"])
+        panel = mocked_create_panel.call_args.args[0]
+        self.assertEqual(panel.reference_plane, "UNKNOWN_PLANE_999")
         mocked_create_panel.assert_called_once()
 
     def test_missing_material_requests_clarification(self) -> None:

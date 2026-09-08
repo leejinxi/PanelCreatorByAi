@@ -16,7 +16,7 @@ class LocalOllamaEndToEndTests(unittest.TestCase):
         create_result = graph.invoke(
             {
                 "user_input": (
-                    "请在FR100创建一块厚度为14mm、"
+                    "请在第100肋位创建一块厚度为14mm、"
                     "材料为AH36的板架"
                 )
             }
