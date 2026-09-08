@@ -18,6 +18,9 @@
 
 # 保留本忽略规则文件
 !/.gitignore
+!/AGENTS.md
+!/README.md
+
 
 # 保留可重复安装和测试所需的根目录文件
 !/requirements.txt
