@@ -1,19 +1,19 @@
 # AI Ship CAD Copilot TODO
 
-更新时间：2026-09-09
+更新时间：2026-09-10
 
 ## P0：换 PC 后继续
 
-- [ ] 检查 `git status --short`，确认 MCP PoC 与文档文件均已带到新 PC。
-- [ ] 激活 `ai_cad_agent`，确认 Python 3.11，安装 `requirements.txt`，运行完整测试。
-- [ ] 在 `tools/cad_tools.py` 增加 Backend 构建/选择逻辑，默认继续使用 `mock`。
-- [ ] 实现 `CAD_BACKEND=mcp`，从 `MCP_CONTRACT_PATH` 和 `MCP_TIMEOUT_SECONDS` 构造 `McpCadBackend`。
-- [ ] 不让 Graph 依赖 MCP SDK、Tool 名称或传输细节；Graph 只调用稳定 CAD Tool 契约。
-- [ ] 更新 Web 执行模式，使 `/api/health` 在契约 Mock 下报告 `mcp-contract-mock`。
-- [ ] 页面明确显示 `MCP Contract Mock · CAD execution is simulated`，不得显示真实 CAD 已连接。
-- [ ] 增加固定 LLM 输出的全链路测试：Web API -> LangGraph -> MCP STDIO Mock -> Web DTO。
-- [ ] 使用真实 Ollama 执行最终全系统人工测试，并记录成功、澄清、不支持、定位面失败和 CAD 不可用结果。
-- [ ] MCP 全系统通过后更新 README 和运行命令。
+- [x] 检查 `git status --short`，确认 MCP PoC 与文档文件均已带到新 PC。
+- [x] 激活 `ai_cad_agent`，确认 Python 3.11，安装 `requirements.txt`，运行完整测试。
+- [x] 在 `tools/cad_tools.py` 增加 Backend 构建/选择逻辑，默认继续使用 `mock`。
+- [x] 实现 `CAD_BACKEND=mcp`，从 `MCP_CONTRACT_PATH` 和 `MCP_TIMEOUT_SECONDS` 构造 `McpCadBackend`。
+- [x] 不让 Graph 依赖 MCP SDK、Tool 名称或传输细节；Graph 只调用稳定 CAD Tool 契约。
+- [x] 更新 Web 执行模式，使 `/api/health` 在契约 Mock 下报告 `mcp-contract-mock`。
+- [x] 页面明确显示 `MCP Contract Mock · CAD execution is simulated`，不得显示真实 CAD 已连接。
+- [x] 增加固定 LLM 输出的全链路测试：Web API -> LangGraph -> MCP STDIO Mock -> Web DTO。
+- [x] 使用真实 Ollama 执行成功与澄清人工测试；定位面失败和 CAD 不可用由自动化测试覆盖。
+- [x] MCP 全系统通过后更新 README 和运行命令。
 
 ## 已完成：本地 MCP 契约与回环基础
 
@@ -31,7 +31,7 @@
 
 ## P1：浏览器演示稳定性
 
-- [ ] 重新实现并验证可控直接 Mock 失败场景：CAD 不可用、定位面不存在。
+- [x] 重新实现并验证可控 MCP Contract Mock 失败场景：CAD 不可用、定位面不存在。
 - [ ] 请求期间锁定提交、新建会话和示例按钮。
 - [ ] 每轮执行前清空旧参数、request ID 和 JSON 结果。
 - [ ] 浏览器超时应提示“停止等待不代表服务端取消”，避免重复创建。

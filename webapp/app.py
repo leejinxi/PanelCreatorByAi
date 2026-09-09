@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent.main import run_panel_agent
+from tools.cad_tools import get_cad_backend_name
 from webapp.response_mapper import map_agent_state
 from webapp.schemas import (
     AgentRunRequest,
@@ -23,10 +24,15 @@ AgentRunner = Callable[[str], dict[str, Any]]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
+def execution_mode() -> ExecutionMode:
+    """报告配置的执行模式，不探测 MCP 或 CAD 连通性。"""
+    name = get_cad_backend_name()
+    return name if name in {"mock", "mcp"} else "unconfigured"
+
+
 def create_app(
     *,
     agent_runner: AgentRunner = run_panel_agent,
-    mode: ExecutionMode = "mock",
 ) -> FastAPI:
     """创建可注入 Agent Runner 的 Web 应用，便于测试和替换后端。"""
 
@@ -49,11 +55,17 @@ def create_app(
         "/api/health",
         response_model=HealthResponse,
     )
-    def health() -> HealthResponse:
-        return HealthResponse(
+    def health() -> HealthResponse | JSONResponse:
+        mode = execution_mode()
+        result = HealthResponse(
+            status="error" if mode == "unconfigured" else "ok",
             mode=mode,
-            cad_backend="mock" if mode == "mock" else "connector",
+            cad_backend={"mock": "mock", "mcp": "mcp-contract-mock",
+                         "unconfigured": "unconfigured"}[mode],
         )
+        if mode == "unconfigured":
+            return JSONResponse(status_code=503, content=result.model_dump())
+        return result
 
     @application.post(
         "/api/agent/runs",
@@ -61,6 +73,7 @@ def create_app(
     )
     def run_agent(request: AgentRunRequest) -> AgentRunResponse | JSONResponse:
         request_id = uuid4().hex
+        mode = execution_mode()
 
         try:
             state = agent_runner(request.message)

@@ -1,0 +1,137 @@
+"""Web/Graph/MCP 集成：固定模型输出，业务场景使用真实 STDIO 子进程。"""
+
+import importlib
+import json
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import httpx
+
+from mcp_client.stdio_client import StdioMcpClient
+from webapp.app import create_app
+
+
+graph_module = importlib.import_module("agent.graph")
+CONTRACT = Path(__file__).resolve().parents[1] / "contracts" / "FULL_contract_with_data.json"
+
+
+def model_output(**overrides) -> str:
+    panel = {
+        "type": "panel",
+        "reference_plane": "第100肋位",
+        "thickness": 14,
+        "material": "AH36",
+        "boundaries": {"top": "DECK-A", "bottom": None, "left": None, "right": None},
+    }
+    panel.update(overrides)
+    return json.dumps({"action": "create_panel", "panel": panel}, ensure_ascii=False)
+
+
+class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        environment = patch.dict("os.environ", {
+            "CAD_BACKEND": "mcp",
+            "MCP_CONTRACT_PATH": str(CONTRACT),
+            "MCP_TIMEOUT_SECONDS": "10",
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
+        # 使用真实默认 Agent Runner，不替换 Graph、CAD Tool 或响应映射。
+        self.client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app()),
+            base_url="http://testserver",
+        )
+        self.addAsyncCleanup(self.client.aclose)
+
+    async def run_output(self, output: str) -> dict:
+        with patch.object(type(graph_module.llm), "invoke", return_value=output):
+            response = await self.client.post(
+                "/api/agent/runs", json={"message": "请创建板架"},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "mcp")
+        self.assertEqual(len(payload["request_id"]), 32)
+        self.assertNotIn("llm_raw_output", payload)
+        return payload
+
+    async def test_real_stdio_success_and_field_mapping(self) -> None:
+        # spy 记录参数后继续调用真实传输，以证明请求确实到达 MCP。
+        original = StdioMcpClient.call_tool
+        with patch.object(StdioMcpClient, "call_tool", autospec=True,
+                          side_effect=original) as call:
+            result = await self.run_output(model_output())
+        call.assert_called_once()
+        self.assertEqual(call.call_args.args[1], "create_panel")
+        self.assertEqual(call.call_args.args[2], {
+            "referenceName": "FR100", "thicknessMm": 14.0, "material": "AH36",
+            "boundaries": {"top": "DECK-A", "bottom": None, "left": None, "right": None},
+        })
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["panel"]["referenceName"], "FR100")
+        self.assertEqual(result["panel"]["boundaries"]["top"], "DECK-A")
+        self.assertEqual(result["cad_result"]["object_id"], "mock-mcp-panel-001")
+        self.assertIn("模拟", result["message"])
+        self.assertIn("模拟", result["cad_result"]["message"])
+        self.assertEqual([s["status"] for s in result["steps"]], ["success"] * 3)
+
+    async def test_real_stdio_reference_not_found(self) -> None:
+        result = await self.run_output(model_output(reference_plane="MISSING"))
+        self.assertEqual(result["panel"]["referenceName"], "MISSING")
+        self.assert_cad_error(result, "REFERENCE_PLANE_NOT_FOUND")
+
+    async def test_real_stdio_cad_unavailable(self) -> None:
+        result = await self.run_output(model_output(material="UNAVAILABLE"))
+        self.assert_cad_error(result, "CAD_UNAVAILABLE")
+
+    async def test_missing_parameters_stop_before_backend(self) -> None:
+        for field in ("reference_plane", "material", "thickness"):
+            with self.subTest(field=field):
+                with patch("tools.cad_tools.build_cad_backend") as build:
+                    result = await self.run_output(model_output(**{field: None}))
+                build.assert_not_called()
+                self.assertEqual(result["status"], "clarification")
+                self.assertIsNone(result["cad_result"])
+                self.assertEqual(result["steps"][-1]["status"], "skipped")
+
+    async def test_unsupported_stops_before_backend(self) -> None:
+        with patch("tools.cad_tools.build_cad_backend") as build:
+            result = await self.run_output(json.dumps({"action": "unsupported", "panel": None}))
+        build.assert_not_called()
+        self.assertEqual(result["status"], "unsupported")
+        self.assertIsNone(result["cad_result"])
+
+    async def test_invalid_parameters_stop_before_backend(self) -> None:
+        with patch("tools.cad_tools.build_cad_backend") as build:
+            result = await self.run_output(model_output(thickness=-5))
+        build.assert_not_called()
+        self.assertEqual(result["status"], "error")
+        self.assertIsNone(result["cad_result"])
+        self.assertEqual(result["steps"][-1]["status"], "skipped")
+
+    async def test_transport_failures_reach_web_safely_without_retry(self) -> None:
+        # 故障注入只替换传输边界，其余链路保持真实；不依赖墙钟超时。
+        for failure, code in ((TimeoutError("private detail"), "MCP_TIMEOUT"),
+                              (RuntimeError("private detail"), "MCP_UNAVAILABLE")):
+            with self.subTest(code=code):
+                with patch.object(StdioMcpClient, "call_tool", side_effect=failure) as call:
+                    result = await self.run_output(model_output())
+                call.assert_called_once()
+                self.assert_cad_error(result, code)
+                self.assertNotIn("private detail", json.dumps(result))
+
+    async def test_malformed_mcp_payload_reaches_web_safely(self) -> None:
+        with patch.object(StdioMcpClient, "call_tool", return_value={"success": True}) as call:
+            result = await self.run_output(model_output())
+        call.assert_called_once()
+        self.assert_cad_error(result, "MCP_INVALID_RESPONSE")
+
+    def assert_cad_error(self, result: dict, code: str) -> None:
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_code"], code)
+        self.assertEqual(result["cad_result"]["error_code"], code)
+        self.assertFalse(result["cad_result"]["success"])
+        self.assertIsNone(result["cad_result"]["object_id"])
+        self.assertEqual([s["status"] for s in result["steps"]],
+                         ["success", "success", "error"])

@@ -135,16 +135,18 @@ function renderPanel(panel) {
 }
 
 function renderResult(payload) {
+  renderExecutionMode(payload.mode);
   const presentation = resultPresentation[payload.status] ?? resultPresentation.error;
   resultElements.container.className = `execution-result ${presentation.className}`;
   resultElements.icon.textContent = presentation.icon;
-  resultElements.kicker.textContent = presentation.kicker;
+  resultElements.kicker.textContent = payload.status === "success"
+    ? "模拟创建完成" : presentation.kicker;
   resultElements.message.textContent = payload.message || "没有返回结果。";
 
   const objectId = payload.cad_result?.object_id;
   const errorCode = payload.error_code;
   resultElements.meta.textContent = objectId
-    ? `CAD 对象 ID：${objectId}`
+    ? `模拟对象 ID：${objectId}`
     : errorCode
       ? `错误码：${errorCode}`
       : "Mock CAD 不会修改真实工程。";
@@ -182,15 +184,25 @@ function renderNetworkError(message) {
   agentStatus.classList.add("offline");
 }
 
+function renderExecutionMode(mode) {
+  const label = { mock: "Direct Mock CAD", mcp: "MCP Contract Mock" }[mode];
+  cadStatus.classList.remove("online", "offline");
+  cadStatus.lastChild.textContent = label || "后端配置未确认";
+  document.querySelector("#execution-mode").textContent = label
+    ? `${label} · CAD execution is simulated`
+    : "后端配置未确认";
+  document.querySelector("#backend-step-label").textContent = label || "等待确认后端";
+}
+
 async function checkHealth() {
   try {
     const response = await fetch("/api/health", { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error("health check failed");
     const payload = await response.json();
     agentStatus.classList.add("online");
-    cadStatus.classList.add("online");
-    cadStatus.lastChild.textContent = payload.mode === "mock" ? "Mock CAD" : "CAD Connected";
+    renderExecutionMode(payload.mode);
   } catch {
+    renderExecutionMode("unconfigured");
     agentStatus.classList.add("offline");
     cadStatus.classList.add("offline");
   }

@@ -15,7 +15,7 @@ AgentRunStatus = Literal[
     "unsupported",
     "error",
 ]
-ExecutionMode = Literal["mock", "cad"]
+ExecutionMode = Literal["mock", "mcp", "unconfigured"]
 StepName = Literal["parse", "validate", "cad"]
 StepStatus = Literal["success", "attention", "error", "skipped"]
 
@@ -41,7 +41,7 @@ class HealthResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["ok"] = "ok"
+    status: Literal["ok", "error"] = "ok"
     mode: ExecutionMode
     agent: Literal["ready"] = "ready"
     cad_backend: str

@@ -25,6 +25,11 @@ def map_agent_state(
 
     panel = _map_panel(state)
     cad_result = _map_cad_result(state.get("cad_result"))
+    if cad_result is not None and cad_result.success and mode in {"mock", "mcp"}:
+        cad_result.message = (
+            "模拟 CAD 已完成板架创建。" if mode == "mock"
+            else "MCP Contract Mock 已完成板架模拟创建，未修改真实 CAD 工程。"
+        )
     status, message, error_code = _classify_result(state, cad_result, mode)
 
     return AgentRunResponse(
@@ -87,11 +92,7 @@ def _classify_result(
 ) -> tuple[AgentRunStatus, str, str | None]:
     if cad_result is not None:
         if cad_result.success:
-            message = (
-                "模拟 CAD 已完成板架创建。"
-                if mode == "mock"
-                else cad_result.message
-            )
+            message = cad_result.message
             return "success", message, None
         return "error", cad_result.message, cad_result.error_code
 

@@ -1,7 +1,17 @@
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from schemas.panel_schema import PanelRequest
-from tools.cad_tools import CadBackendError, CreatePanelTool, MockCadBackend
+from tools.cad_tools import (
+    DEFAULT_MCP_CONTRACT_PATH,
+    CadBackendError,
+    CreatePanelTool,
+    MockCadBackend,
+    build_cad_backend,
+    create_panel,
+)
+from tools.mcp_cad_backend import McpCadBackend
 
 
 def make_panel_request() -> PanelRequest:
@@ -87,6 +97,91 @@ class CreatePanelToolTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertTrue(result.object_id.startswith("mock-panel-"))
+
+
+class CadBackendConfigurationTests(unittest.TestCase):
+    def test_defaults_to_mock_backend(self) -> None:
+        backend = build_cad_backend({})
+
+        self.assertIsInstance(backend, MockCadBackend)
+
+    def test_explicit_mock_backend_is_case_insensitive(self) -> None:
+        backend = build_cad_backend({"CAD_BACKEND": " Mock "})
+
+        self.assertIsInstance(backend, MockCadBackend)
+
+    def test_builds_mcp_backend_from_default_contract(self) -> None:
+        backend = build_cad_backend({"CAD_BACKEND": "mcp"})
+
+        self.assertIsInstance(backend, McpCadBackend)
+        self.assertEqual(backend.client.contract_path, DEFAULT_MCP_CONTRACT_PATH)
+        self.assertEqual(backend.client.timeout_seconds, 10.0)
+
+    def test_builds_mcp_backend_from_explicit_settings(self) -> None:
+        backend = build_cad_backend(
+            {
+                "CAD_BACKEND": "mcp",
+                "MCP_CONTRACT_PATH": str(DEFAULT_MCP_CONTRACT_PATH),
+                "MCP_TIMEOUT_SECONDS": "2.5",
+            }
+        )
+
+        self.assertIsInstance(backend, McpCadBackend)
+        self.assertEqual(backend.client.contract_path, DEFAULT_MCP_CONTRACT_PATH)
+        self.assertEqual(backend.client.timeout_seconds, 2.5)
+
+    def test_rejects_unknown_backend(self) -> None:
+        with self.assertRaisesRegex(CadBackendError, "CAD_BACKEND") as raised:
+            build_cad_backend({"CAD_BACKEND": "real-cad"})
+
+        self.assertEqual(raised.exception.error_code, "CAD_BACKEND_CONFIG_ERROR")
+
+    def test_rejects_missing_contract(self) -> None:
+        with self.assertRaises(CadBackendError) as raised:
+            build_cad_backend(
+                {
+                    "CAD_BACKEND": "mcp",
+                    "MCP_CONTRACT_PATH": str(Path("missing-contract.json")),
+                }
+            )
+
+        self.assertEqual(raised.exception.error_code, "CAD_BACKEND_CONFIG_ERROR")
+
+    def test_rejects_invalid_timeout(self) -> None:
+        for timeout in ("not-a-number", "0", "-1", "nan", "inf"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(CadBackendError) as raised:
+                    build_cad_backend(
+                        {
+                            "CAD_BACKEND": "mcp",
+                            "MCP_TIMEOUT_SECONDS": timeout,
+                        }
+                    )
+                self.assertEqual(
+                    raised.exception.error_code,
+                    "CAD_BACKEND_CONFIG_ERROR",
+                )
+
+    def test_create_panel_maps_backend_configuration_error(self) -> None:
+        with patch.dict("os.environ", {"CAD_BACKEND": "invalid"}, clear=True):
+            with self.assertLogs("tools.cad_tools", level="WARNING"):
+                result = create_panel(make_panel_request())
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_code, "CAD_BACKEND_CONFIG_ERROR")
+
+    def test_create_panel_uses_mcp_backend(self) -> None:
+        with patch.dict("os.environ", {"CAD_BACKEND": "mcp"}, clear=True):
+            with patch.object(
+                McpCadBackend,
+                "create_panel",
+                return_value="mock-mcp-panel-configured",
+            ) as invoke_backend:
+                result = create_panel(make_panel_request())
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.object_id, "mock-mcp-panel-configured")
+        invoke_backend.assert_called_once()
 
 
 if __name__ == "__main__":

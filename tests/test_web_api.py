@@ -13,6 +13,9 @@ web_app_module = importlib.import_module("webapp.app")
 
 class WebApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
+        environment = patch.dict("os.environ", {"CAD_BACKEND": "mock"})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.received_messages: list[str] = []
 
         def successful_runner(message: str) -> dict:
@@ -62,6 +65,33 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("AI Ship CAD Copilot", response.text)
         self.assertIn('id="request-form"', response.text)
         self.assertIn("DEMO MODE", response.text)
+
+    async def test_mcp_mode_matches_health_and_simulated_result(self) -> None:
+        with patch.dict("os.environ", {"CAD_BACKEND": " MCP "}):
+            health = await self.client.get("/api/health")
+            response = await self.client.post(
+                "/api/agent/runs", json={"message": "创建板架"}
+            )
+        self.assertEqual(health.json()["mode"], "mcp")
+        self.assertEqual(health.json()["cad_backend"], "mcp-contract-mock")
+        self.assertEqual(response.json()["mode"], "mcp")
+        self.assertIn("模拟", response.json()["message"])
+        self.assertIn("模拟", response.json()["cad_result"]["message"])
+
+    async def test_unknown_backend_health_is_not_ready(self) -> None:
+        with patch.dict("os.environ", {"CAD_BACKEND": "unknown"}):
+            response = await self.client.get("/api/health")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["mode"], "unconfigured")
+        self.assertEqual(self.received_messages, [])
+
+    async def test_mcp_health_does_not_construct_backend(self) -> None:
+        with patch.dict("os.environ", {"CAD_BACKEND": "mcp"}):
+            with patch("tools.cad_tools.build_cad_backend") as build:
+                response = await self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        build.assert_not_called()
+        self.assertEqual(self.received_messages, [])
 
     async def test_static_assets_are_available(self) -> None:
         css_response = await self.client.get("/static/styles.css")

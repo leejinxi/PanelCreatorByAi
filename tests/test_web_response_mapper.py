@@ -5,6 +5,18 @@ from webapp.response_mapper import map_agent_state
 
 
 class WebResponseMapperTests(unittest.TestCase):
+    def test_mcp_failure_keeps_business_error_and_mode(self) -> None:
+        result = map_agent_state(
+            {"cad_result": CadExecutionResult(
+                success=False, message="定位面不存在。",
+                error_code="REFERENCE_PLANE_NOT_FOUND",
+            )}, request_id="MCP-FAIL", mode="mcp",
+        )
+        self.assertEqual(result.mode, "mcp")
+        self.assertEqual(result.error_code, "REFERENCE_PLANE_NOT_FOUND")
+        self.assertEqual(result.message, "定位面不存在。")
+        self.assertEqual(result.steps[-1].status, "error")
+
     def test_maps_success_without_exposing_internal_state(self) -> None:
         response = map_agent_state(
             {

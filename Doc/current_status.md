@@ -1,6 +1,6 @@
 # AI Ship CAD Copilot 当前状态
 
-更新时间：2026-09-09
+更新时间：2026-09-10
 
 ## 项目定位
 
@@ -30,7 +30,7 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 - LocalQwen HTTP Client、LangGraph、强类型 Schema、有限重试和多轮澄清。
 - 已知标尺面规范化以及其他工程名称直传。
 - FastAPI API、单页浏览器工作台和直接 `MockCadBackend` 演示模式。
-- 浏览器方案 Step 1–3 已进入 2026-09-08 提交。
+- 浏览器方案 Step 1–4 已完成；Step 4 已通过真实 Qwen 成功与澄清场景验收。
 
 ### 本地 MCP 回环 PoC
 
@@ -45,12 +45,19 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 
 ## 当前准确边界
 
-- `McpCadBackend` 尚未接入 `agent/graph.py` 的运行时选择。
-- `CAD_BACKEND=mcp` 尚未实现，Web 健康状态仍只报告现有 Mock 模式。
-- 尚未完成“真实 Ollama -> LangGraph -> MCP STDIO Mock -> Web 页面”的最终全系统测试。
+- `McpCadBackend` 已通过 `CAD_BACKEND=mcp` 接入运行时选择，Graph 仍只依赖稳定的 CAD Tool 契约。
+- Web 健康状态已区分 `mock` 与 `mcp-contract-mock`，未知配置返回 503。
+- 已完成“真实 Ollama -> LangGraph -> MCP STDIO Mock -> Web 页面”的成功与澄清场景人工验收。
 - 本地契约完全由个人 PC 自行拟定，不代表公司原生 CAD API。
 - 公司端目前只有原生 CAD API，没有 MCP Server；真实接入仍需要公司侧 CAD Adapter/MCP Server。
-- 浏览器演示方案 Step 4 的失败场景增强代码未保留，应视为待办。
+- 直接 Mock 失败注入尚未实现；MCP Contract Mock 的定位面失败和 CAD 不可用场景已覆盖。
+
+## 下一步计划
+
+1. 修订 `AGENTS.md` 与 `README.md` 中仍保留的旧定位面查询描述，统一为“已知标尺面规范化，未知名称原文交给 CAD 判定”。
+2. 增加 MCP 会话复用和更精确的协议错误分类，避免每次创建都冷启动子进程。
+3. 将 Ollama 端点、模型、超时及其他机器相关参数配置化，支持换机和内网部署。
+4. 等公司提供正式 CAD API 或 CAD Adapter/MCP Server 后，替换 Contract Mock，并保留现有回归测试。
 
 ## 当前测试基线
 
@@ -60,7 +67,9 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 python -X utf8 run_tests.py
 ```
 
-结果：94 项运行，93 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。
+结果：115 项运行，114 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。
+
+真实网页验收：`CAD_BACKEND=mcp` 下，真实 Qwen 成功解析“第100肋位、14mm、AH36”并经 MCP Contract Mock 返回模拟对象；缺少材料时页面进入澄清且跳过 CAD。
 
 ## 换 PC 后首先执行
 
@@ -82,3 +91,4 @@ Python 应为 3.11，Ollama 应存在 `qwen2.5:7b`。开始修改前执行 `git 
 4. `Doc/TODO.md`
 5. `contracts/FULL_contract_with_data.json`
 6. `Doc/Plan/内网mock数据生成.md`
+
