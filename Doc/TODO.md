@@ -1,125 +1,62 @@
 # AI Ship CAD Copilot TODO
 
-更新时间：2026-08-21
+更新时间：2026-09-09
 
-本文档简要记录当前讨论中发现、后续需要设计或实现的问题。
+## P0：换 PC 后继续
 
-## P0：近期优先处理
+- [ ] 检查 `git status --short`，确认 MCP PoC 与文档文件均已带到新 PC。
+- [ ] 激活 `ai_cad_agent`，确认 Python 3.11，安装 `requirements.txt`，运行完整测试。
+- [ ] 在 `tools/cad_tools.py` 增加 Backend 构建/选择逻辑，默认继续使用 `mock`。
+- [ ] 实现 `CAD_BACKEND=mcp`，从 `MCP_CONTRACT_PATH` 和 `MCP_TIMEOUT_SECONDS` 构造 `McpCadBackend`。
+- [ ] 不让 Graph 依赖 MCP SDK、Tool 名称或传输细节；Graph 只调用稳定 CAD Tool 契约。
+- [ ] 更新 Web 执行模式，使 `/api/health` 在契约 Mock 下报告 `mcp-contract-mock`。
+- [ ] 页面明确显示 `MCP Contract Mock · CAD execution is simulated`，不得显示真实 CAD 已连接。
+- [ ] 增加固定 LLM 输出的全链路测试：Web API -> LangGraph -> MCP STDIO Mock -> Web DTO。
+- [ ] 使用真实 Ollama 执行最终全系统人工测试，并记录成功、澄清、不支持、定位面失败和 CAD 不可用结果。
+- [ ] MCP 全系统通过后更新 README 和运行命令。
 
-- [ ] 明确正式 CAD 中定位面、Surface、标尺等对象的查询 API。
-- [ ] 将 `list_reference_planes()` 的硬编码 Mock 数据替换为可切换的 Provider。
-- [ ] 在 `AgentState` 中增加 `project_id`，确保读取当前工程对应的定位面目录。
-- [ ] 定义 `ReferencePlaneProvider` 稳定接口，并提供 Mock 与 MCP 两种实现。
-- [ ] 确认正式 CAD 是否提供稳定的对象 ID，以及名称、重命名和工程切换语义。
-- [ ] 定义首版 MCP Tool Schema、错误码、版本号、超时和幂等策略。
-- [ ] 准备内网联调包：源码、离线 Python 依赖、协议样例、校验清单和最小 CAD 测试工程。
-- [ ] 决定过渡阶段是否使用 `reference_planes.json` 作为工程数据缓存。
-- [ ] 如果使用 JSON，定义统一的数据格式、版本号、生成时间和工程修订号。
-- [ ] 实现从 CAD 自动导出 JSON，避免人工维护节点名称。
-- [x] 将 Prompt 中定位面抽取规则和确定性解析器解耦，避免完全依赖 LLM。
-- [x] 增加不同工程命名方式的测试数据和回归测试。
+## 已完成：本地 MCP 契约与回环基础
 
-## P1：定位面解析完善
+- [x] 自行构造并确认 `FULL_contract_with_data.json`，版本 `0.1-poc`。
+- [x] `create_panel` 输入 Schema 与 `PanelRequest` 语义对应。
+- [x] 空白定位面、材料和边界字符串被契约拒绝。
+- [x] 成功响应要求非空 `objectId` 且 `errorCode=null`。
+- [x] 失败响应要求 `objectId=null` 且非空 `errorCode`。
+- [x] 实现契约加载和 Schema 校验。
+- [x] 实现独立 Mock MCP STDIO Server。
+- [x] 验证 MCP `initialize`、`tools/list` 和 `tools/call`。
+- [x] 实现 STDIO MCP Client。
+- [x] 实现 `McpCadBackend` 字段映射。
+- [x] 覆盖 MCP 成功、业务失败、超时、通信异常和非法响应测试。
 
-- [x] 支持按工程正式名称匹配定位面。
-- [x] 支持工程别名匹配；别名的正式数据来源仍需与 CAD 侧确认。
-- [x] 支持 `X=10000`、`Y=-2500`、`Z=12.5m` 等坐标表达式。
-- [ ] 将坐标轴、单位、坐标系和匹配容差改为工程级配置。
-- [x] 处理名称与坐标同时出现但互相冲突的情况。
-- [x] 处理多个节点共享同一别名产生的歧义并返回候选项。
-- [ ] 支持用户选择候选项后恢复原 LangGraph 流程。
-- [ ] 明确找不到现有定位面时，是禁止创建还是允许创建临时定位面。
-- [ ] 评估模糊匹配策略；模糊匹配只能提供候选，不能直接执行 CAD。
+## P1：浏览器演示稳定性
 
-## P1：object_id 与 name
+- [ ] 重新实现并验证可控直接 Mock 失败场景：CAD 不可用、定位面不存在。
+- [ ] 请求期间锁定提交、新建会话和示例按钮。
+- [ ] 每轮执行前清空旧参数、request ID 和 JSON 结果。
+- [ ] 浏览器超时应提示“停止等待不代表服务端取消”，避免重复创建。
+- [ ] 在 1366x768 和 1920x1080 下完成人工页面验收。
 
-- [ ] 与正式 CAD 接口确认是否存在稳定的对象 ID、句柄或路径。
-- [ ] 确认节点名称是否唯一、是否允许重命名、是否能作为长期引用。
-- [ ] 根据 CAD 能力决定保留 `object_id`，还是暂时以 `name` 作为唯一键。
-- [ ] 如果保留 `object_id`，让 `create_panel()` 使用 ID 精确引用定位面。
-- [ ] 在日志和界面中继续保留 `name`，方便用户阅读和问题排查。
-- [ ] 增加节点重命名后的引用稳定性测试。
+## P1：未来公司 CAD 接入
 
-## P1：工程数据刷新与缓存
+- [ ] 在公司环境确认原生 CAD `create_panel` API、字段、单位和错误语义。
+- [ ] 确认 `referenceName`、材料和四向边界的正式参数类型。
+- [ ] 确认成功后返回对象 ID、句柄还是名称。
+- [ ] 确认 CAD UI 主线程、事务和失败回滚要求。
+- [ ] 在公司侧实现原生 CAD API 到 MCP Tool 的 Adapter。
+- [ ] 用公司确认的正式契约替换个人 PC 实验契约，同时保留 Contract Mock 回归。
 
-- [ ] 选择数据刷新策略：每次请求实时查询、事件驱动刷新，或两者结合。
-- [ ] CAD 新增、删除、重命名或移动节点时，使缓存自动失效。
-- [ ] 工程切换时清除旧工程缓存。
-- [ ] 使用工程修订号或时间戳判断 JSON/内存缓存是否过期。
-- [ ] 写入 JSON 时采用临时文件加原子替换，避免 Agent 读到半写入文件。
-- [ ] 定义 CAD 不可用时是否允许使用旧缓存，以及如何提示缓存可能过期。
+## 暂缓
 
-## P1：材料目录与解析
+- 定位面目录查询、`reference_plane_id` 和旧 Resolver 接回主链路。
+- `project_id`、多工程隔离、缓存和工程修订号。
+- 材料目录与边界对象 Provider。
+- 幂等、重试、审计、认证和内网中央任务分发。
+- RAG、stiffener、其他结构类型及自动强度设计。
 
-- [ ] 与正式 CAD 确认材料参数是否必须来自当前工程材料库，以及 CAD 使用的正式材料名称字段。
-- [ ] 定义 `MaterialRecord` 和 `MaterialResolution` Schema，区分材料正式名称、别名和解析状态。
-- [ ] 设计 `list_materials()`，从当前工程或 CAD Provider 获取真实可用材料目录。
-- [ ] 实现 `resolve_material()`，优先从用户原文匹配材料正式名称或别名，LLM 提取结果只作为兜底。
-- [ ] 当 Qwen 把已明确提供的材料返回为 `null` 时，尝试从原文和材料目录恢复，而不是立即要求用户重复提供。
-- [ ] 处理材料未找到和多个材料候选项，并确保解析失败时不调用 CAD。
-- [ ] 如果 CAD 允许任意材料字符串，评估是否只做轻量材料牌号提取，而不引入完整材料目录。
-- [ ] 获得真实边界对象数据来源后，评估采用同一模式实现 `list_structure_objects()` 和 `resolve_boundary()`。
+## 安全边界
 
-## P2：CAD Tool 工程化
-
-- [x] 将 `create_panel()` 入参改为强类型请求对象。
-- [x] 将 `create_panel()` 返回值从字符串改为 `CadExecutionResult`。
-- [ ] 返回真实 Panel `object_id`、错误码和可读消息。
-- [x] 对参数错误、定位面不存在、Mock CAD 执行失败和模型通信超时进行受控处理；真实 MCP/CAD 错误映射待联调。
-- [ ] 将定位面 Mock、JSON Provider 和未来 MCP Provider 放在统一接口之后。
-- [x] 将 Mock CAD 与未来 MCP CAD Backend 放在统一 `CadBackend` 接口之后。
-- [ ] 增加 CAD 操作超时、重试、日志和幂等性设计。
-
-## P2：MCP 与真实 CAD
-
-- [ ] 设计 `list_reference_planes(project_id)` MCP Tool。
-- [ ] 设计 `get_reference_plane(object_id)` MCP Tool。
-- [ ] 设计 `create_panel(...)` MCP Tool。
-- [ ] 明确 MCP 返回 Schema、错误码和版本兼容策略。
-- [ ] 验证当前解析器能直接使用 MCP 返回的 `ReferencePlaneRecord`。
-- [ ] 增加真实 CAD 集成测试环境，避免只依赖 Mock。
-
-## P2：LLM 与 Agent 流程
-
-- [ ] 继续收集 Qwen 漏提取、误提取定位面的真实案例。
-- [ ] 对 Prompt 做回归测试，避免修改一个示例后影响其他表达方式。
- - [x] 增加模型非法 JSON/动作计划的有限次数重试。
- - [x] 让 CLI `clarification` 支持有限多轮补充参数和累积输入恢复。
-- [ ] 评估从固定 LangGraph 流程升级为模型原生 Tool Calling 的时机。
-- [ ] 保证 LLM 只负责语言理解，不把它生成的工程对象名称直接当作事实。
-
-## P3：RAG 与工程知识
-
-- [ ] 明确 RAG 只存放设计规则、命名规范和专业知识，不作为实时工程对象目录。
-- [ ] 整理不同工程中常见的定位面术语和表达方式。
-- [ ] 为 RAG 内容增加来源、版本和工程适用范围。
-- [ ] 设计“工程事实来自 CAD、专业解释来自 RAG”的冲突处理规则。
-
-## 测试清单
-
-- [x] LLM 漏掉 `FR100` 时，原文解析仍能恢复定位面。
-- [x] 当前工程目录中存在的任意正式名称能够正确解析。
-- [x] 当前工程目录中不存在的名称不得调用 CAD。
-- [x] `X=10000` 能按单位和容差解析到正确节点。
-- [x] 名称与坐标指向同一节点时解析成功。
-- [x] 名称与坐标指向不同节点时返回冲突。
-- [x] 同一别名对应多个节点时返回候选项。
-- [ ] 节点重命名后缓存能够刷新，稳定 ID 引用不丢失。
-- [ ] 切换工程后不会继续使用上一个工程的标尺目录。
-- [ ] CAD/MCP 不可用时返回受控错误，不执行创建操作。
-- [ ] Qwen 对“14mm厚的AH36板架”返回 `material=null` 时，能够从用户原文恢复 `AH36`。
-- [ ] 材料正式名称和别名能够解析为 CAD 接受的正式材料名称。
-- [ ] 材料不存在或存在多个候选项时不得调用 CAD。
-
-## 已完成
-
-- [x] 建立 `PanelRequest`、`PanelBoundaries` 和 `CadExecutionResult` Schema。
-- [x] 将强类型 Schema 接入 `AgentState`。
-- [x] 在 LangGraph 中增加基础参数校验和条件路由。
-- [x] 改进 Prompt，要求保留用户明确提供的定位面原文。
-- [x] 增加名称、别名和坐标三类定位面解析基础能力。
-- [x] 增加 `resolved`、`ambiguous`、`not_found` 和 `conflict` 解析状态。
-- [x] 增加定位面解析与 Graph 自动化测试。
-- [x] 编写 Panel Schema 与定位面解析流程讲解文档。
-- [x] 增加 CAD Tool、Qwen Client、CLI 和动作路由专项测试。
-- [x] 增加固定依赖、统一测试入口和可选真实 Ollama E2E 测试。
+- 参数缺失或非法时不得调用 CAD Backend。
+- MCP/CAD 错误必须返回稳定错误码，不泄漏堆栈、路径或内部异常。
+- 本地 Contract Mock 的成功结果只能描述为模拟执行。
+- 未获得公司 API 资料前，不得声称实验字段与真实 CAD API 一致。

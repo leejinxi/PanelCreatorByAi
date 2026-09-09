@@ -25,3 +25,4 @@
 # 保留可重复安装和测试所需的根目录文件
 !/requirements.txt
 !/run_tests.py
+!/contracts/*.json

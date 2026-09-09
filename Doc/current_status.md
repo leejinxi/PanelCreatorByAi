@@ -1,112 +1,84 @@
 # AI Ship CAD Copilot 当前状态
 
-更新时间：2026-08-21
-
-本文档记录仓库当前可确认的实现状态、范围边界和近期方向。它是状态快照，不替代 `Doc/Plan/` 的详细设计或 `Doc/TODO.md` 的待办管理。若描述不一致，应先以当前代码和测试为准，再同步文档。
+更新时间：2026-09-09
 
 ## 项目定位
 
-当前 MVP 只聚焦“AI + 创建板架（panel）”：理解中文需求、抽取板架参数、确认工程定位面、完成安全校验，然后调用 CAD 工具契约。
+当前 MVP 只处理自然语言创建板架。Python Agent 负责意图抽取、参数校验和工具调用；最终 CAD 模型必须由 C++ CAD 软件创建。
 
-当前不是正式 CAD 集成产品。定位面目录和 CAD 创建后端仍是 Mock；MCP 与真实 C++ CAD Provider 尚未接入。最终 CAD 模型必须由 C++ CAD 软件创建，Python Agent 不承担正式几何建模。
+当前尚未连接公司 CAD。浏览器、直接 Mock CAD 和本地 MCP Contract Mock 均为演示或原理验证能力，不得描述为真实 CAD 集成。
 
-## 当前已完成
-
-### 开发与模型环境
-
-- 目标运行环境为 Python 3.11，标准 conda 环境名称为 `ai_cad_agent`。
-- 本地模型运行方式为 Ollama，当前模型为 `qwen2.5:7b`。
-- 已实现自定义 `LocalQwen` HTTP Client，通过 Ollama `/api/chat` 接口请求结构化结果。
-- 已建立 `requirements.txt` 和统一测试入口 `run_tests.py`。
-
-### Agent 基础框架
-
-- 已建立 LangGraph 工作流和共享状态。
-- 已实现单次命令行请求及最多 3 轮补充信息的交互入口。
-- 已实现 `create_panel` 与 `unsupported` 的动作边界。
-- 模型结构化输出无效时支持有限重试；流程错误以受控消息返回。
-
-### 板架、定位面与 CAD 契约
-
-- 已定义动作、板架、边界、定位面解析和 CAD 执行结果等 Pydantic 契约。
-- 已具备板厚、材料、边界和定位面等基础字段的抽取与校验链路。
-- 已实现按名称、别名和坐标解析定位面，并处理未找到、歧义及名称/坐标冲突。
-- 解析优先依据用户原文；只有完整 `PanelRequest` 且定位面唯一解析成功时才允许进入 CAD 节点。
-- 已定义 `CadBackend` 和 `create_panel()` 契约，并实现不会创建真实模型的 `MockCadBackend`。
-- 已有 Schema、Graph、定位面解析、Qwen Client、CLI、CAD 工具及本地端到端测试。
-
-## 当前执行链路
+## 当前主运行链路
 
 ```text
 用户输入
-  -> LocalQwen 提取 AgentActionPlan
-  -> LangGraph 校验动作和基础参数
-  -> 确定性解析当前工程定位面
-  -> 组装并完整校验 PanelRequest
-  -> create_panel / CadBackend
-  -> 当前为 Mock；未来通过 MCP 调用 C++ CAD 软件
+  -> LocalQwen / Ollama 提取 AgentActionPlan
+  -> LangGraph 校验定位面、厚度和材料
+  -> 已知 FR/SL/LV 标尺面名称规范化
+  -> 构造 PanelRequest
+  -> create_panel()
+  -> 当前默认 MockCadBackend
 ```
 
-参数缺失或非法、定位面不存在或不唯一、名称与坐标冲突、模型输出不可恢复、Provider 不可用或执行失败时，必须澄清或返回受控错误，不得创建对象。
+Agent 不查询定位面目录，也不判断定位面是否真实存在。未知工程名称保持原文并交给未来 CAD Backend 判断。历史定位面 Resolver 仍保留，但不参与主 Graph。
 
-## 尚未完成与近期主线
+## 已完成
 
-### 参数、边界和校验
+### Agent 与浏览器基线
 
-- 继续完善板架边界表达、工程单位、坐标系、容差和业务规则。
-- 扩充真实表达的回归样例，并完善候选定位面的多轮选择和流程恢复。
+- Python 3.11、conda 环境 `ai_cad_agent`、Ollama `qwen2.5:7b`。
+- LocalQwen HTTP Client、LangGraph、强类型 Schema、有限重试和多轮澄清。
+- 已知标尺面规范化以及其他工程名称直传。
+- FastAPI API、单页浏览器工作台和直接 `MockCadBackend` 演示模式。
+- 浏览器方案 Step 1–3 已进入 2026-09-08 提交。
 
-### Mock 与 Provider
+### 本地 MCP 回环 PoC
 
-- 增加 `project_id` 隔离、刷新策略和稳定对象 ID。
-- 将硬编码定位面目录替换为可切换 Provider。
-- 增加超时、错误码、幂等、日志和缓存失效策略。
+- 已确认实验契约 `contracts/FULL_contract_with_data.json`，版本 `0.1-poc`，确认日期 2026-09-09。
+- 契约只定义 `create_panel`，包含输入/输出 JSON Schema 和成功、定位面不存在、CAD 不可用三类数据。
+- 输入拒绝空白定位面、材料和边界；输出强制成功/失败字段互斥。
+- 已实现 `mcp_mock/contract.py` 和独立 STDIO Mock MCP Server。
+- 已通过真实 MCP `initialize`、`tools/list`、`tools/call` 子进程回环测试。
+- 已实现 `mcp_client/stdio_client.py` 和 `tools/mcp_cad_backend.py`。
+- 已验证 `PanelRequest.reference_plane -> referenceName`、`thickness -> thicknessMm`、材料和边界映射。
+- 已覆盖 MCP 成功、业务错误、超时、通信失败和非法返回的受控映射。
 
-### MCP 与 C++ CAD
+## 当前准确边界
 
-- 定义定位面查询和板架创建的 MCP Tool、Schema、错误码及版本策略。
-- 打通 Python Agent 到 C++ CAD 软件的通信。
-- 由 C++ CAD 软件查询工程事实并创建最终模型；Agent 只提交经过验证的强类型请求。
-- 建立真实 CAD 集成测试环境，同时保留 Mock 快速回归。
+- `McpCadBackend` 尚未接入 `agent/graph.py` 的运行时选择。
+- `CAD_BACKEND=mcp` 尚未实现，Web 健康状态仍只报告现有 Mock 模式。
+- 尚未完成“真实 Ollama -> LangGraph -> MCP STDIO Mock -> Web 页面”的最终全系统测试。
+- 本地契约完全由个人 PC 自行拟定，不代表公司原生 CAD API。
+- 公司端目前只有原生 CAD API，没有 MCP Server；真实接入仍需要公司侧 CAD Adapter/MCP Server。
+- 浏览器演示方案 Step 4 的失败场景增强代码未保留，应视为待办。
 
-### RAG
+## 当前测试基线
 
-- 在核心执行链稳定后引入 RAG。
-- RAG 只用于设计规则、行业术语、命名规范和专业解释，不替代实时工程对象目录。
-- 知识文档与当前 CAD 工程状态冲突时，以 CAD Provider 的工程事实为准。
+2026-09-09 在 Python 3.11.15 / `ai_cad_agent` 下验证：
 
-## 当前不做
+```powershell
+python -X utf8 run_tests.py
+```
 
-- 前端（FE）或完整产品界面。
-- 自动强度设计、校核或优化。
-- stiffener（扶强材）创建与布置。
-- 板架之外的其他结构类型和泛化 CAD Agent。
-- 在 Python 中直接生成最终 CAD 几何模型。
+结果：94 项运行，93 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。
 
-这些方向只有在板架 MVP、MCP 和真实 C++ CAD 链路稳定并明确调整范围后才进入计划。
-
-## 环境与运行
+## 换 PC 后首先执行
 
 ```powershell
 conda activate ai_cad_agent
 python --version
 python -m pip install -r requirements.txt
-python run_tests.py
+python -X utf8 run_tests.py
+ollama list
 ```
 
-Python 版本应为 3.11。完整本地推理还需要：
+Python 应为 3.11，Ollama 应存在 `qwen2.5:7b`。开始修改前执行 `git status --short`，确认本批 MCP 文件已经提交或仍作为未提交改动存在。
 
-```powershell
-ollama pull qwen2.5:7b
-python -m agent.main "在 FR100 创建板架，厚度 14mm，材料 AH36"
-```
+阅读顺序：
 
-跨电脑工作时禁止把个人目录、盘符或其他机器专属绝对路径写入代码和配置。
-
-## 接手与核验
-
-- 先阅读根目录 `AGENTS.md`，再阅读本文档、`README.md` 和任务相关设计文档。
-- 修改前检查 Git 状态，保留其他人的未提交内容。
-- `Doc/TODO.md` 部分事项可能已由代码实现但尚未同步勾选；开始工作前需核对实现与测试。
-- 修改行为必须补充或更新测试，并确保安全停止分支仍然成立。
-- 对外说明必须明确 Mock 与真实集成的区别，不能声称当前已经连接真实 CAD 或 MCP。
+1. `AGENTS.md`
+2. `Doc/current_status.md`
+3. `Doc/Plan/本地MCP回环PoC阶段性报告_2026-09-09.md`
+4. `Doc/TODO.md`
+5. `contracts/FULL_contract_with_data.json`
+6. `Doc/Plan/内网mock数据生成.md`

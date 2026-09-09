@@ -4,7 +4,7 @@
 
 版本：v1.0（Review 草案）  
 日期：2026-09-08  
-当前状态：Step 1 已确认；Step 2 已确认；Step 3 已完成代码实现，等待 Review；Step 4 尚未开始  
+当前状态：Step 1 已确认；Step 2 已确认；Step 3 已完成代码实现，等待 Review；Step 4 的代码未保留，待重新实现
 当前目标：优先交付一个可在本地浏览器展示、可录制视频，并能平滑迁移到内网的板架创建界面
 
 ---
@@ -480,6 +480,22 @@ Review 重点：接口是否泄漏内部状态；错误状态映射是否准确�
 Review 重点：展示信息是否准确；Mock 标识是否充分；交互是否能让非技术观众看懂 Agent 到 CAD 的过程。
 
 ## Step 4：演示稳定性与失败场景
+
+状态：**代码未保留，待重新实现与验证**。
+
+此前曾规划并实现但当前代码未保留的内容：Mock 支持 `success`、`unavailable`、`reference_not_found` 三种启动场景；请求期间锁定新建会话和示例入口；增加浏览器超时、网络错误和重复提交提示；每轮清空旧参数与结果。等待动画不再提前标记步骤成功。浏览器停止等待不代表服务端已取消，页面提示确认执行结果后再提交。
+
+固定输入继续使用第 4.3 节的 A、B、C；场景 D 使用与 A 相同的完整输入，启动前指定失败 Mock（修改后需重启服务）：
+
+```powershell
+conda activate ai_cad_agent
+$env:MOCK_CAD_SCENARIO = "reference_not_found"
+python run_web.py
+```
+
+模拟 CAD 不可用时改为 `unavailable`；恢复正常演示时改为 `success`。此配置只影响 Mock，不查询真实工程。
+
+离线验证：`python -X utf8 run_tests.py`；页面交互测试由同一入口在 Node 可用时执行，也可单独运行 `node --test tests/webapp_interactions.cjs`。已覆盖失败后成功、超时释放按钮、重复提交、澄清重试与旧结果清理。实际浏览器工具因 Windows 登录错误 1385 无法启动，页面视觉与人工演示不记为通过。
 
 目标：保证录制时不因常见异常中断，并预演真实 CAD 错误。
 
