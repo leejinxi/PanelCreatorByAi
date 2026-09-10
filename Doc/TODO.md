@@ -2,7 +2,7 @@
 
 更新时间：2026-09-10
 
-已提交代码基线：`a566430` — 实现板架边界必填与多轮修正，打通 MCP STDIO 模拟创建链路。提交前完整回归162项：161项通过，1项真实 Ollama E2E 默认跳过；真实 Qwen 网页验收单独完成。
+已提交基础代码基线：`a566430` — 实现板架边界必填与多轮修正，打通 MCP STDIO 模拟创建链路。其上的 Agent 决策展示增强已开发并验收，最终提交号见本次开发提交。
 
 ## P0：板架边界必填与匹配（当前优先）
 
@@ -19,14 +19,14 @@
 - [x] Step 3 准备：新增 contracts/boundary_list_0.2_draft.json，数组、minItems=1；保持 draft，旧契约不变。
 - [x] Step 3：按用户确认启用本地实验 0.2 契约并切换 MCP 演示默认配置；本轮验证通信，对象匹配仍待实现。
 - [x] Step 3：MCP 数组映射及版本兼容性拦截，集成测试直接使用已确认的0.2运行契约完成 STDIO 回归。
-- [ ] Step 3：直接 Mock 和 Contract Mock 共用对象匹配；未知、歧义和不可用对象不能默认成功，比较符原样透传。
+- [x] Step 3：Direct Mock 和 Contract Mock 在进入 CAD 前共用 Graph 层对象匹配；未知、歧义和不可用对象不能默认成功，比较符原样透传。
 - [x] Step 3：Trace 记录实际契约版本；区分本地拦截、业务拒绝和结果不确定。
 - [x] Step 4 部分：Web 动态边界列表、有效数量和问题提示；已移除“允许暂时为空”。
-- [ ] Step 4：补齐来源轮次和 Provider 逐项匹配状态展示。
+- [x] Step 4：补齐 Mock 工程查询的对象逐项匹配状态展示；来源轮次暂不进入本轮 Demo。
 - [x] Step 4：更新 Direct Mock 示例、WebMCP 工具说明、测试 fixture、真实 Ollama E2E 请求及当前运行说明。
 - [x] Step 4：新版 MCP 启用后修订完整 MCP 演示手册。
 - [x] 解析与通信验收：缺失、1条、多条、超过4条、重复、非法符号、名称规范化、定位面缺失、多轮替换、MCP超时及异常；服务端拒绝空数组、非法符号、空目标、缺字段及多余字段。
-- [ ] 对象匹配验收：未知目标、歧义目标、不可用目标及别名映射；验证 Direct Mock 与 Contract Mock 行为一致，匹配失败不创建。
+- [x] 对象匹配验收：未知目标、歧义目标、不可用目标、角色限制及别名映射；Graph 在 Direct Mock 与 Contract Mock 前统一拦截，匹配失败不创建。
 - [x] 完成真实 Ollama → LangGraph → MCP STDIO Mock → Web 演示：无边界 → 补1条；确认没有有效边界时不调用创建。
 - [x] 真实 Ollama → LangGraph → Direct Mock → Web 人工验收：无边界拦截，补1条成功且其余参数保留。
 
@@ -34,23 +34,23 @@
 
 下一轮改为 Demo 展示优先，详细方案见 [Agent 决策展示增强方案 v1.0](Plan/AI_Ship_CAD_Copilot_Agent决策展示增强方案_v1.0.md)。原 P0 对象匹配并入 `inspect_project_context` 的 Mock 工程查询，不重复建设两套目录和匹配逻辑。
 
-1. 定义最小工程对象目录与匹配结果 Schema，明确唯一命中、未找到、歧义、不可用和角色不允许状态。
-2. 新增精选 Demo 工程数据和确定性 `inspect_project_context` 只读工具；保留用户比较符，禁止未知对象默认成功。
-3. 增加 `AgentDecision`、最多两步的决策历史、查询后 Qwen 决策，以及 fallback、safety override 和 Safety Gate。
-4. 在 Web 展示两次决策、中间工具观察、对象逐项状态和 CAD 是否调用。
-5. 固化成功、歧义、不存在三个 Demo 场景，完成自动化回归与真实 Qwen 页面验收。
+1. [x] 定义最小工程对象目录与匹配结果 Schema，明确唯一命中、未找到、歧义、不可用和角色不允许状态。
+2. [x] 新增精选 Demo 工程数据和确定性 `inspect_project_context` 只读工具；保留用户比较符，禁止未知对象默认成功。
+3. [x] 增加 `AgentDecision`、最多两步的决策历史、查询后 Qwen 决策，以及 fallback、safety override 和 Safety Gate。
+4. [x] 在 Web 展示两次决策、中间工具观察、对象逐项状态和 CAD 是否调用。
+5. [x] 固化成功、歧义、不存在三个 Demo 场景，完成自动化回归与真实 Qwen 页面验收。
 
 ## P1：Demo Agent 决策展示增强
 
 - [x] 形成 Demo 展示优先的产品与详细开发方案，明确最小范围、Graph、Schema、Prompt、Web DTO、测试矩阵和验收标准。
-- [ ] 新增 `AgentDecision`、`AgentDecisionRecord` 及状态字段；只展示结构化观察、动作和依据，不展示隐藏思维链。
-- [ ] 新增 Demo 工程对象 Schema、`mock_data/demo_project.json` 和确定性查询工具。
-- [ ] 查询前生成 `policy` 决策；查询后由 Qwen 生成结构化决策，异常时使用确定性 fallback。
-- [ ] 增加 safety override 和 Safety Gate，未查询、未唯一匹配或不安全状态不得调用 CAD。
-- [ ] Web 增加“需求理解、Agent 决策、工程查询、Agent 评估、安全校验、CAD 执行”展示链。
-- [ ] 固化正常创建、主甲板歧义、FR999 不存在三个演示场景。
-- [ ] 覆盖模型非法决策、决策超限、对象不允许、对象不可用和 CAD 失败等离线测试。
-- [ ] 完成 Direct Mock 真实 Qwen 页面验收；页面始终明确 Mock 工程目录与模拟 CAD 后端。
+- [x] 新增 `AgentDecision`、`AgentDecisionRecord` 及状态字段；只展示结构化观察、动作和依据，不展示隐藏思维链。
+- [x] 新增 Demo 工程对象 Schema、`mock_data/demo_project.json` 和确定性查询工具。
+- [x] 查询前生成 `policy` 决策；查询后由 Qwen 生成结构化决策，异常时使用确定性 fallback。
+- [x] 增加 safety override 和 Safety Gate，未查询、未唯一匹配或不安全状态不得调用 CAD。
+- [x] Web 增加“需求理解、Agent 决策、工程查询、Agent 评估、安全校验、CAD 执行”展示链。
+- [x] 固化正常创建、主甲板歧义、FR999 不存在三个演示场景。
+- [x] 覆盖模型非法决策、决策超限、对象不允许、对象不可用和 CAD 失败等离线测试。
+- [x] 完成 Direct Mock 真实 Qwen 页面验收；页面始终明确 Mock 工程目录与模拟 CAD 后端。
 
 ## 历史已完成：换 PC 基线与 0.1-poc 主链路
 
@@ -103,10 +103,10 @@
 
 ## 暂缓
 
-- 定位面目录查询、`reference_plane_id` 和旧 Resolver 接回主链路。
+- 真实 CAD 定位面目录查询、`reference_plane_id` 和旧 Resolver 接回主链路；本地 Demo JSON 查询已完成。
 - `project_id`、多工程隔离、缓存和工程修订号。
 - 材料目录与真实公司边界对象 Provider（本地 Mock 边界匹配已进入本轮 P0）。
-- Agent 多工具选择、候选对照及决策记录展示；仅讨论，待边界闭环完成后推进。
+- 通用 Agent 多工具选择；本轮受控决策记录和候选对照展示已完成。
 - 幂等、重试、审计、认证和内网中央任务分发。
 - RAG、stiffener、其他结构类型及自动强度设计。
 

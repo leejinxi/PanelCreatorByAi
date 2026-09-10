@@ -68,6 +68,8 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="trace-pipeline"', response.text)
         self.assertIn('id="mcp-request-output"', response.text)
         self.assertIn('id="current-provider"', response.text)
+        self.assertIn('id="decision-timeline"', response.text)
+        self.assertIn('id="safety-gate"', response.text)
         self.assertNotIn('id="cad-preview-heading"', response.text)
         self.assertIn("DEMO MODE", response.text)
 

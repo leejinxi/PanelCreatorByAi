@@ -21,6 +21,12 @@ const mcpCallState = document.querySelector("#mcp-call-state");
 const mcpRequestOutput = document.querySelector("#mcp-request-output");
 const mcpResponseOutput = document.querySelector("#mcp-response-output");
 const currentProvider = document.querySelector("#current-provider");
+const decisionTimeline = document.querySelector("#decision-timeline");
+const inspectionProject = document.querySelector("#inspection-project");
+const inspectionResults = document.querySelector("#inspection-results");
+const safetyGate = document.querySelector("#safety-gate");
+const safetyGateState = document.querySelector("#safety-gate-state");
+const safetyGateReason = document.querySelector("#safety-gate-reason");
 const traceElements = new Map(
   [...document.querySelectorAll("[data-trace]")].map((element) => [
     element.dataset.trace,
@@ -50,7 +56,7 @@ let executionMode = "unconfigured";
 
 const DEMO_REQUEST_TIMEOUT_MS = 150000;
 
-const stepOrder = ["parse", "validate", "cad"];
+const stepOrder = ["parse", "decision", "inspect", "evaluate", "validate", "cad"];
 const resultPresentation = {
   success: { className: "success", icon: "✓", kicker: "创建完成" },
   clarification: { className: "attention", icon: "!", kicker: "需要补充" },
@@ -146,7 +152,7 @@ function displayValue(value, fallback = "—") {
   return String(value);
 }
 
-function renderPanel(panel) {
+function renderPanel(panel, inspection = null) {
   const boundaries = panel?.boundaries ?? [];
   const referenceName = displayValue(panel?.referenceName);
 
@@ -158,7 +164,11 @@ function renderPanel(panel) {
   list.replaceChildren();
   boundaries.forEach((boundary) => {
     const item = document.createElement("li");
-    item.textContent = `${boundary.operator}${boundary.target} · 格式有效`;
+    const match = (inspection?.boundaries || []).find(
+      (entry) => entry.query === boundary.target,
+    );
+    const status = match ? matchStatusLabel(match.status) : "待工程查询";
+    item.textContent = `${boundary.operator}${boundary.target} · ${status}`;
     list.append(item);
   });
   const issues = document.querySelector("#boundary-issues");
@@ -169,6 +179,103 @@ function renderPanel(panel) {
     issues.append(item);
   });
   parameterState.textContent = panel ? "已提取" : "等待解析";
+}
+
+const actionLabels = {
+  inspect_project_context: "查询工程上下文",
+  ask_clarification: "请求用户补充",
+  prepare_creation: "准备创建板架",
+  stop: "停止执行",
+};
+
+const sourceLabels = {
+  policy: "安全策略",
+  llm: "Qwen 决策",
+  fallback: "稳定性兜底",
+  safety_override: "安全规则覆盖",
+};
+
+function matchStatusLabel(status) {
+  return {
+    resolved: "Mock 对象已唯一匹配",
+    not_found: "Mock 对象未找到",
+    ambiguous: "存在多个候选",
+    unavailable: "对象不可用",
+    not_eligible: "对象角色不允许",
+  }[status] || "状态未知";
+}
+
+function renderDecisionLoop(trace) {
+  const decisions = trace?.decision_steps || [];
+  decisionTimeline.replaceChildren();
+  if (!decisions.length) {
+    const empty = document.createElement("li");
+    empty.className = "decision-empty";
+    empty.textContent = "本次请求没有形成可展示的 Agent 决策。";
+    decisionTimeline.append(empty);
+  }
+  decisions.forEach((step) => {
+    const item = document.createElement("li");
+    item.className = `decision-item ${step.source}`;
+    const heading = document.createElement("div");
+    heading.className = "decision-item-heading";
+    const index = document.createElement("span");
+    index.textContent = `DECISION ${String(step.sequence).padStart(2, "0")}`;
+    const source = document.createElement("b");
+    source.textContent = sourceLabels[step.source] || step.source;
+    heading.append(index, source);
+    const observation = document.createElement("p");
+    observation.textContent = step.observation;
+    const action = document.createElement("strong");
+    action.textContent = `下一步：${actionLabels[step.action] || step.action}`;
+    const reason = document.createElement("small");
+    reason.textContent = `依据：${step.reason_code}`;
+    item.append(heading, observation, action, reason);
+    if (step.evidence?.length) {
+      const evidence = document.createElement("ul");
+      step.evidence.forEach((value) => {
+        const evidenceItem = document.createElement("li");
+        evidenceItem.textContent = value;
+        evidence.append(evidenceItem);
+      });
+      item.append(evidence);
+    }
+    decisionTimeline.append(item);
+  });
+
+  const inspection = trace?.project_inspection;
+  inspectionResults.replaceChildren();
+  if (!inspection) {
+    inspectionProject.textContent = "未执行查询";
+    const empty = document.createElement("li");
+    empty.className = "inspection-empty";
+    empty.textContent = "只读 Mock 工程查询未执行。";
+    inspectionResults.append(empty);
+  } else {
+    inspectionProject.textContent = `${inspection.project_name} · ${inspection.revision}`;
+    const matches = [inspection.reference_plane, ...(inspection.boundaries || [])];
+    matches.forEach((match) => {
+      const item = document.createElement("li");
+      item.className = `match-${match.status}`;
+      const role = match.role === "reference_plane" ? "定位面" : "边界";
+      const target = match.resolved_name || match.candidates?.join(" / ") || "—";
+      const query = document.createElement("span");
+      query.textContent = `${role} · ${match.query}`;
+      const status = document.createElement("strong");
+      status.textContent = matchStatusLabel(match.status);
+      const resolved = document.createElement("small");
+      resolved.textContent = target;
+      item.append(query, status, resolved);
+      inspectionResults.append(item);
+    });
+  }
+
+  const gate = trace?.safety_gate || { authorized: false, reason: null };
+  safetyGate.className = `safety-gate ${gate.authorized ? "authorized" : decisions.length ? "blocked" : "neutral"}`;
+  safetyGateState.textContent = gate.authorized ? "允许执行" : decisions.length ? "未授权执行" : "等待评估";
+  safetyGateReason.textContent = gate.reason || (
+    gate.authorized ? "所有安全检查已通过" : "只有工程对象唯一匹配后才允许创建"
+  );
 }
 
 function renderExecutionTrace(trace) {
@@ -220,6 +327,7 @@ function clearExecutionTrace() {
   mcpCallState.textContent = "WAITING";
   mcpRequestOutput.textContent = "等待通过安全校验的请求…";
   mcpResponseOutput.textContent = "尚未调用 MCP Provider。";
+  renderDecisionLoop(null);
 }
 
 function renderResult(payload) {
@@ -227,6 +335,7 @@ function renderResult(payload) {
   renderExecutionTrace(payload.execution_trace);
   renderMcpInspector(payload.execution_trace);
   renderProviderBoundary(payload.execution_trace);
+  renderDecisionLoop(payload.execution_trace);
   const presentation = resultPresentation[payload.status] ?? resultPresentation.error;
   resultElements.container.className = `execution-result ${presentation.className}`;
   resultElements.icon.textContent = presentation.icon;
@@ -246,7 +355,7 @@ function renderResult(payload) {
     ? `REQUEST ${payload.request_id.slice(0, 8).toUpperCase()}`
     : "REQUEST —";
   renderSteps(payload.steps);
-  renderPanel(payload.panel);
+  renderPanel(payload.panel, payload.execution_trace?.project_inspection);
 
   jsonOutput.textContent = JSON.stringify(payload, null, 2);
   jsonDetails.hidden = false;
@@ -265,6 +374,9 @@ function renderResult(payload) {
 function renderNetworkError(message) {
   renderSteps([
     { name: "parse", status: "error" },
+    { name: "decision", status: "skipped" },
+    { name: "inspect", status: "skipped" },
+    { name: "evaluate", status: "skipped" },
     { name: "validate", status: "skipped" },
     { name: "cad", status: "skipped" },
   ]);

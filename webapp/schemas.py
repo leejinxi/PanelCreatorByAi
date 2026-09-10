@@ -17,7 +17,7 @@ AgentRunStatus = Literal[
     "error",
 ]
 ExecutionMode = Literal["mock", "mcp", "unconfigured"]
-StepName = Literal["parse", "validate", "cad"]
+StepName = Literal["parse", "decision", "inspect", "evaluate", "validate", "cad"]
 StepStatus = Literal["success", "attention", "error", "skipped"]
 
 
@@ -96,12 +96,64 @@ class McpResponseView(BaseModel):
     error_code: str | None = None
 
 
+class DecisionStepView(BaseModel):
+    """A whitelisted decision summary; never contains hidden reasoning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sequence: int = Field(ge=1)
+    source: Literal["policy", "llm", "fallback", "safety_override"]
+    action: Literal[
+        "inspect_project_context",
+        "ask_clarification",
+        "prepare_creation",
+        "stop",
+    ]
+    reason_code: str
+    observation: str
+    evidence: list[str] = Field(default_factory=list)
+
+
+class ObjectMatchView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    role: Literal["reference_plane", "boundary"]
+    status: Literal[
+        "resolved", "not_found", "ambiguous", "unavailable", "not_eligible"
+    ]
+    resolved_name: str | None = None
+    candidates: list[str] = Field(default_factory=list)
+
+
+class ProjectInspectionView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_name: str
+    revision: str
+    data_source_label: Literal["Mock Project Context"] = "Mock Project Context"
+    reference_plane: ObjectMatchView
+    boundaries: list[ObjectMatchView] = Field(default_factory=list)
+
+
+class SafetyGateView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authorized: bool
+    reason: str | None = None
+
+
 class ExecutionTraceView(BaseModel):
     """页面透明执行台使用的请求级 Trace。"""
 
     model_config = ConfigDict(extra="forbid")
 
     nodes: list[TraceNodeView]
+    decision_steps: list[DecisionStepView] = Field(default_factory=list)
+    project_inspection: ProjectInspectionView | None = None
+    safety_gate: SafetyGateView = Field(
+        default_factory=lambda: SafetyGateView(authorized=False)
+    )
     mcp_request: McpCallView | None = None
     mcp_response: McpResponseView | None = None
     provider: TraceProvider

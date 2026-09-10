@@ -12,6 +12,7 @@ def begin_trace(provider: str) -> Token:
     return _TRACE.set({
         "provider": provider,
         "llm_duration_ms": None,
+        "llm_call_count": 0,
         "mcp_duration_ms": None,
         "mcp_request": None,
         "mcp_response": None,
@@ -25,7 +26,11 @@ def end_trace(token: Token) -> None:
 def record_llm(duration_ms: int) -> None:
     trace = _TRACE.get()
     if trace is not None:
-        trace["llm_duration_ms"] = max(0, duration_ms)
+        previous = trace.get("llm_duration_ms")
+        trace["llm_duration_ms"] = max(0, duration_ms) + (
+            previous if isinstance(previous, int) else 0
+        )
+        trace["llm_call_count"] = int(trace.get("llm_call_count", 0)) + 1
 
 
 def record_mcp_request(arguments: dict[str, Any], contract_version: str) -> None:

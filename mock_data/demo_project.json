@@ -1,0 +1,112 @@
+{
+  "project_id": "demo-ship-001",
+  "project_name": "Agent Demo Ship",
+  "revision": "mock-r1",
+  "data_source": "mock",
+  "objects": [
+    {
+      "object_id": "ruler-fr-100",
+      "name": "FR100",
+      "aliases": ["FR 100", "第100肋位", "100号肋位"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["reference_plane", "boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "coordinate-x-10000",
+      "name": "X=10000",
+      "aliases": ["X = 10000"],
+      "object_type": "coordinate_plane",
+      "eligible_roles": ["reference_plane"],
+      "status": "available"
+    },
+    {
+      "object_id": "ruler-sl-minus-10",
+      "name": "SL-10",
+      "aliases": ["SL -10"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "ruler-sl-10",
+      "name": "SL10",
+      "aliases": ["SL 10"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "ruler-sl-12",
+      "name": "SL12",
+      "aliases": ["SL 12"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "ruler-lv-2",
+      "name": "LV2",
+      "aliases": ["LV 2"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "ruler-lv-5",
+      "name": "LV5",
+      "aliases": ["LV 5"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "ruler-lv-8",
+      "name": "LV8",
+      "aliases": ["LV 8"],
+      "object_type": "ruler_plane",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "surface-deck-a-boundary",
+      "name": "DECK-A",
+      "aliases": ["Deck A Boundary"],
+      "object_type": "surface",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "surface-main-deck-a",
+      "name": "Main Deck A",
+      "aliases": ["主甲板", "Deck A"],
+      "object_type": "surface",
+      "eligible_roles": ["reference_plane", "boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "surface-main-deck-b",
+      "name": "Main Deck B",
+      "aliases": ["主甲板"],
+      "object_type": "surface",
+      "eligible_roles": ["reference_plane", "boundary"],
+      "status": "available"
+    },
+    {
+      "object_id": "surface-disabled",
+      "name": "Disabled Surface",
+      "aliases": ["停用曲面"],
+      "object_type": "surface",
+      "eligible_roles": ["reference_plane", "boundary"],
+      "status": "unavailable"
+    },
+    {
+      "object_id": "surface-boundary-only",
+      "name": "Boundary Only Surface",
+      "aliases": ["仅边界曲面"],
+      "object_type": "surface",
+      "eligible_roles": ["boundary"],
+      "status": "available"
+    }
+  ]
+}

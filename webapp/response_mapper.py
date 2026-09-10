@@ -9,11 +9,15 @@ from webapp.schemas import (
     AgentRunStatus,
     AgentStepView,
     CadResultView,
+    DecisionStepView,
     ExecutionMode,
     ExecutionTraceView,
     McpCallView,
     McpResponseView,
+    ObjectMatchView,
     PanelView,
+    ProjectInspectionView,
+    SafetyGateView,
     TraceNodeView,
 )
 
@@ -136,9 +140,25 @@ def _build_steps(
     status: AgentRunStatus,
     cad_result: CadResultView | None,
 ) -> list[AgentStepView]:
+    decision_count = len(state.get("decision_history", []) or [])
+    inspected = state.get("project_inspection") is not None
+    authorized = state.get("execution_authorized") is True
+
     if cad_result is not None:
         return [
             AgentStepView(name="parse", status="success"),
+            AgentStepView(
+                name="decision",
+                status="success" if decision_count else "skipped",
+            ),
+            AgentStepView(
+                name="inspect",
+                status="success" if inspected else "skipped",
+            ),
+            AgentStepView(
+                name="evaluate",
+                status="success" if decision_count > 1 else "skipped",
+            ),
             AgentStepView(name="validate", status="success"),
             AgentStepView(
                 name="cad",
@@ -149,14 +169,35 @@ def _build_steps(
     if status == "clarification":
         return [
             AgentStepView(name="parse", status="success"),
-            AgentStepView(name="validate", status="attention"),
+            AgentStepView(
+                name="decision",
+                status="success" if inspected else "attention",
+            ),
+            AgentStepView(
+                name="inspect",
+                status="success" if inspected else "skipped",
+            ),
+            AgentStepView(
+                name="evaluate",
+                status="attention" if inspected else "skipped",
+            ),
+            AgentStepView(
+                name="validate",
+                status="skipped" if inspected else "attention",
+            ),
             AgentStepView(name="cad", status="skipped"),
         ]
 
     if status == "unsupported":
         return [
             AgentStepView(name="parse", status="success"),
-            AgentStepView(name="validate", status="success"),
+            AgentStepView(
+                name="decision",
+                status="success" if decision_count else "skipped",
+            ),
+            AgentStepView(name="inspect", status="skipped"),
+            AgentStepView(name="evaluate", status="skipped"),
+            AgentStepView(name="validate", status="skipped"),
             AgentStepView(name="cad", status="skipped"),
         ]
 
@@ -181,8 +222,24 @@ def _build_steps(
             status="error" if parse_failed else "success",
         ),
         AgentStepView(
+            name="decision",
+            status=(
+                "skipped" if parse_failed
+                else "error" if not inspected
+                else "success"
+            ),
+        ),
+        AgentStepView(
+            name="inspect",
+            status="success" if inspected else "skipped",
+        ),
+        AgentStepView(
+            name="evaluate",
+            status="error" if inspected else "skipped",
+        ),
+        AgentStepView(
             name="validate",
-            status="skipped" if parse_failed else "error",
+            status="error" if authorized else "skipped",
         ),
         AgentStepView(name="cad", status="skipped"),
     ]
@@ -286,9 +343,13 @@ def _build_execution_trace(
         "attention" if status == "clarification" else "success"
     )
     graph_summary = {
-        "success": "路由：parse -> validate -> cad",
-        "clarification": "路由：parse -> validate -> END",
-        "unsupported": "路由：parse -> validate -> END",
+        "success": "路由：parse -> validate -> decide -> inspect -> decide -> safety_gate -> cad",
+        "clarification": (
+            "路由在 Mock 工程查询后的 Agent 评估阶段暂停"
+            if state.get("project_inspection") is not None
+            else "路由在参数分析后的 Agent 决策阶段暂停"
+        ),
+        "unsupported": "路由：parse -> validate -> decide -> END",
         "error": (
             "路由在模型阶段受控停止"
             if llm_status == "error"
@@ -305,7 +366,11 @@ def _build_execution_trace(
             summary="本地模型已生成结构化候选参数"
             if llm_status == "success"
             else "本地模型未返回可用参数",
-            details={"model": "qwen2.5:7b", "data": "candidate parameters only"},
+            details={
+                "model": "qwen2.5:7b",
+                "data": "candidate parameters and bounded decision",
+                "call_count": trace.get("llm_call_count", 0),
+            },
         ),
         TraceNodeView(
             name="graph",
@@ -339,10 +404,74 @@ def _build_execution_trace(
     ]
     return ExecutionTraceView(
         nodes=nodes,
+        decision_steps=_map_decision_steps(state),
+        project_inspection=_map_project_inspection(state),
+        safety_gate=_map_safety_gate(state, cad_result),
         mcp_request=mcp_request,
         mcp_response=mcp_response,
         provider=provider,
         total_ms=_optional_duration(trace.get("total_ms")),
+    )
+
+
+def _map_decision_steps(state: Mapping[str, Any]) -> list[DecisionStepView]:
+    result = []
+    for record in state.get("decision_history", []) or []:
+        try:
+            data = record.model_dump() if hasattr(record, "model_dump") else dict(record)
+            decision = data["decision"]
+            result.append(DecisionStepView(
+                sequence=data["sequence"],
+                source=data["source"],
+                action=decision["next_action"],
+                reason_code=decision["reason_code"],
+                observation=decision["observation"],
+                evidence=decision.get("evidence", []),
+            ))
+        except (KeyError, TypeError, ValueError, ValidationError):
+            continue
+    return result
+
+
+def _map_project_inspection(
+    state: Mapping[str, Any],
+) -> ProjectInspectionView | None:
+    inspection = state.get("project_inspection")
+    if inspection is None:
+        return None
+    try:
+        data = inspection.model_dump() if hasattr(inspection, "model_dump") else dict(inspection)
+        return ProjectInspectionView(
+            project_name=data["project_name"],
+            revision=data["revision"],
+            reference_plane=_map_object_match(data["reference_plane"]),
+            boundaries=[_map_object_match(item) for item in data.get("boundaries", [])],
+        )
+    except (KeyError, TypeError, ValueError, ValidationError):
+        return None
+
+
+def _map_object_match(data: Mapping[str, Any]) -> ObjectMatchView:
+    return ObjectMatchView(
+        query=data["query"],
+        role=data["role"],
+        status=data["status"],
+        resolved_name=data.get("resolved_name"),
+        candidates=data.get("candidates", []),
+    )
+
+
+def _map_safety_gate(
+    state: Mapping[str, Any],
+    cad_result: CadResultView | None,
+) -> SafetyGateView:
+    value = state.get("execution_authorized")
+    authorized = value if isinstance(value, bool) else bool(
+        cad_result is not None and cad_result.success
+    )
+    return SafetyGateView(
+        authorized=authorized,
+        reason=_optional_text(state.get("authorization_reason")),
     )
 
 

@@ -106,7 +106,7 @@ class WebResponseMapperTests(unittest.TestCase):
         self.assertNotIn("llm_raw_output", payload)
         self.assertEqual(
             [step.status for step in response.steps],
-            ["success", "success", "success"],
+            ["success", "skipped", "skipped", "skipped", "success", "success"],
         )
 
     def test_maps_clarification_with_partial_panel(self) -> None:
@@ -129,7 +129,7 @@ class WebResponseMapperTests(unittest.TestCase):
         self.assertIsNone(response.panel.material)
         self.assertIsNone(response.cad_result)
         self.assertEqual(response.steps[1].status, "attention")
-        self.assertEqual(response.steps[2].status, "skipped")
+        self.assertEqual(response.steps[-1].status, "skipped")
 
     def test_maps_unsupported_result_without_cad(self) -> None:
         response = map_agent_state(
@@ -141,7 +141,7 @@ class WebResponseMapperTests(unittest.TestCase):
 
         self.assertEqual(response.status, "unsupported")
         self.assertIsNone(response.cad_result)
-        self.assertEqual(response.steps[2].status, "skipped")
+        self.assertEqual(response.steps[-1].status, "skipped")
 
     def test_maps_llm_error_to_parse_step(self) -> None:
         response = map_agent_state(
@@ -179,7 +179,7 @@ class WebResponseMapperTests(unittest.TestCase):
 
         self.assertEqual(response.status, "error")
         self.assertEqual(response.error_code, "REFERENCE_PLANE_NOT_FOUND")
-        self.assertEqual(response.steps[2].status, "error")
+        self.assertEqual(response.steps[-1].status, "error")
 
     def test_maps_empty_state_to_controlled_error(self) -> None:
         response = map_agent_state({}, request_id="REQ-006")

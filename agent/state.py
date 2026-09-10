@@ -1,8 +1,10 @@
 from typing import Any, NotRequired, Required, TypedDict
 
 from schemas.agent_action_schema import AgentActionPlan
+from schemas.agent_decision_schema import AgentDecision, AgentDecisionRecord
 from schemas.panel_schema import CadExecutionResult, PanelRequest
 from schemas.boundary_schema import BoundaryParseResult
+from schemas.project_context_schema import ProjectInspectionResult
 
 
 class AgentState(TypedDict, total=False):
@@ -36,3 +38,13 @@ class AgentState(TypedDict, total=False):
     # 为后续 JSON 修复或模型重试预留
     retry_count: NotRequired[int]
     boundary_result: NotRequired[BoundaryParseResult]
+
+    # Demo Agent 的结构化决策与只读工程观察
+    decision: NotRequired[AgentDecision | None]
+    decision_history: NotRequired[list[AgentDecisionRecord]]
+    decision_count: NotRequired[int]
+    project_inspection: NotRequired[ProjectInspectionResult | None]
+
+    # CAD 节点必须再次检查的确定性执行授权
+    execution_authorized: NotRequired[bool]
+    authorization_reason: NotRequired[str | None]

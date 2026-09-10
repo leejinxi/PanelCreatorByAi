@@ -108,6 +108,9 @@ def create_app(
                     "message": "Agent 服务发生未预期异常。",
                     "steps": [
                         {"name": "parse", "status": "error"},
+                        {"name": "decision", "status": "skipped"},
+                        {"name": "inspect", "status": "skipped"},
+                        {"name": "evaluate", "status": "skipped"},
                         {"name": "validate", "status": "skipped"},
                         {"name": "cad", "status": "skipped"},
                     ],

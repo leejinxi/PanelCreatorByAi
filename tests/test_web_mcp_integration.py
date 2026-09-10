@@ -79,7 +79,7 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["cad_result"]["object_id"], "mock-mcp-panel-001")
         self.assertIn("模拟", result["message"])
         self.assertIn("模拟", result["cad_result"]["message"])
-        self.assertEqual([s["status"] for s in result["steps"]], ["success"] * 3)
+        self.assertEqual([s["status"] for s in result["steps"]], ["success"] * 6)
         trace = result["execution_trace"]
         self.assertEqual(
             [node["name"] for node in trace["nodes"]],
@@ -104,7 +104,10 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_stdio_reference_not_found(self) -> None:
         result = await self.run_output(model_output(reference_plane="MISSING"))
         self.assertEqual(result["panel"]["referenceName"], "MISSING")
-        self.assert_cad_error(result, "REFERENCE_PLANE_NOT_FOUND")
+        self.assertEqual(result["status"], "clarification")
+        self.assertIn("MISSING", result["message"])
+        self.assertIsNone(result["cad_result"])
+        self.assertIsNone(result["execution_trace"]["mcp_request"])
 
     async def test_boundary_clarification_then_real_stdio_creation(self):
         turns = ['在FR100创建14mm厚AH36板架']
@@ -190,4 +193,4 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["cad_result"]["success"])
         self.assertIsNone(result["cad_result"]["object_id"])
         self.assertEqual([s["status"] for s in result["steps"]],
-                         ["success", "success", "error"])
+                         ["success", "success", "success", "success", "success", "error"])

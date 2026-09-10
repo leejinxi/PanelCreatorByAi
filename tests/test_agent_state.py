@@ -3,7 +3,9 @@ from typing import get_type_hints
 
 from agent.state import AgentState
 from schemas.agent_action_schema import AgentActionPlan
+from schemas.agent_decision_schema import AgentDecision
 from schemas.panel_schema import CadExecutionResult, PanelRequest
+from schemas.project_context_schema import ProjectInspectionResult
 
 
 class AgentStateTests(unittest.TestCase):
@@ -13,6 +15,8 @@ class AgentStateTests(unittest.TestCase):
         self.assertIn("action_plan", AgentState.__optional_keys__)
         self.assertIn("cad_result", AgentState.__optional_keys__)
         self.assertIn("error", AgentState.__optional_keys__)
+        self.assertIn("decision_history", AgentState.__optional_keys__)
+        self.assertIn("project_inspection", AgentState.__optional_keys__)
 
     def test_minimal_initial_state_is_supported(self) -> None:
         state: AgentState = {
@@ -52,6 +56,8 @@ class AgentStateTests(unittest.TestCase):
         self.assertIn(PanelRequest, hints["panel_request"].__args__)
         self.assertIn(AgentActionPlan, hints["action_plan"].__args__)
         self.assertIn(CadExecutionResult, hints["cad_result"].__args__)
+        self.assertIn(AgentDecision, hints["decision"].__args__)
+        self.assertIn(ProjectInspectionResult, hints["project_inspection"].__args__)
 
 
 if __name__ == "__main__":

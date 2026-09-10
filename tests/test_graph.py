@@ -180,7 +180,7 @@ class AgentGraphTests(unittest.TestCase):
         self.assertEqual(panel.reference_plane, "FR100")
         mocked_create_panel.assert_called_once()
 
-    def test_unknown_reference_plane_reaches_cad(self) -> None:
+    def test_unknown_reference_plane_requests_clarification(self) -> None:
         output = create_panel_output(
             {
                 "type": "panel",
@@ -203,10 +203,9 @@ class AgentGraphTests(unittest.TestCase):
                 {"user_input": "在UNKNOWN_PLANE_999创建板架，边界 >SL10"}
             )
 
-        self.assertIsNone(result["error"])
-        panel = mocked_create_panel.call_args.args[0]
-        self.assertEqual(panel.reference_plane, "UNKNOWN_PLANE_999")
-        mocked_create_panel.assert_called_once()
+        self.assertIn("UNKNOWN_PLANE_999", result["clarification"])
+        self.assertEqual(result["decision"].reason_code, "REFERENCE_NOT_FOUND")
+        mocked_create_panel.assert_not_called()
 
     def test_missing_material_requests_clarification(self) -> None:
         output = create_panel_output(
@@ -321,7 +320,7 @@ class AgentGraphTests(unittest.TestCase):
         ):
             result = graph_module.graph.invoke({"user_input": "在FR100创建板架，边界 >SL10"})
 
-        self.assertEqual(mocked_invoke.call_count, 2)
+        self.assertEqual(mocked_invoke.call_count, 3)
         self.assertEqual(result["retry_count"], 1)
         self.assertIsNone(result["error"])
         mocked_create_panel.assert_called_once()

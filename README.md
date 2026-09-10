@@ -7,7 +7,10 @@
 - 创建板架意图识别、定位面名称规范化、厚度和材料抽取。
 - 必须提供至少一条边界，如 >SL10；符号只保留并传递，不解释几何关系。
 - 原文确定性解析、去重、缺参澄清及多轮边界追加/替换。
-- CLI 与浏览器共用同一 Graph；Web 展示动态边界列表、问题和执行 Trace。
+- 使用仓库内 `mock_data/demo_project.json` 模拟当前工程对象目录，确定性区分唯一命中、未找到、歧义、不可用和角色不允许。
+- 查询前由安全策略决定先观察，查询后由 Qwen 在创建、澄清和停止中选择；模型异常或不安全建议由 fallback / safety override 接管。
+- 只有有效 `PanelRequest`、所有工程对象唯一匹配且最终决策允许时，Safety Gate 才授权 CAD Mock。
+- CLI 与浏览器共用同一 Graph；Web 展示两次决策、Mock 工程查询、安全门禁和 CAD 是否调用。
 
 ## 本地运行
 
@@ -60,7 +63,7 @@ $env:MCP_CONTRACT_PATH = "contracts/boundary_list_0.2.json"
 python run_web.py
 ~~~
 
-创建成功时第四步显示 tools/call、耗时及 0.2-poc 请求，结果来自 STDIO Mock Server。未设置 CAD_BACKEND 时仍默认 Direct Mock。Mock 目前不查询边界对象，不验证几何，固定模拟 ID 不是持久化对象标识。
+创建成功时页面显示 tools/call、耗时及 0.2-poc 请求，结果来自 STDIO Mock Server。未设置 CAD_BACKEND 时仍默认 Direct Mock。Agent 会先查询本地 Demo 工程目录，但不验证几何；固定模拟 ID 不是持久化对象标识。
 
 旧 contracts/FULL_contract_with_data.json 和 boundary_list_0.2_draft.json 保留作历史/拒绝回归，不是当前演示入口。详细场景见 Doc/Plan/本地MCP演示操作手册_2026-09-10.md。
 
@@ -72,4 +75,4 @@ python -X utf8 run_tests.py
 
 默认隔离真实 Ollama/CAD，MCP 回归会启动本机 STDIO 子进程。真实 Ollama E2E 需显式设置 RUN_LOCAL_E2E=1。
 
-主逻辑见 agent/graph.py，边界多轮规则见 agent/boundary_session.py。最新完成度与待办见 Doc/current_status.md 和 Doc/TODO.md。
+Direct Mock 页面内置三个主要演示：`FR100 + SL10 + LV5` 正常创建、`主甲板` 返回两个候选、`FR999` 返回不存在。主逻辑见 agent/graph.py，Mock 查询见 tools/project_context_tools.py，边界多轮规则见 agent/boundary_session.py。最新完成度与待办见 Doc/current_status.md 和 Doc/TODO.md。

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Ship CAD Copilot 本地板架创建工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=light-blue-v2">
-  <script src="/static/app.js?v=light-blue-v2" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=agent-decision-v1">
+  <script src="/static/app.js?v=agent-decision-v1" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -57,8 +57,9 @@
 
           <div class="examples" aria-label="示例需求">
             <span>快速示例</span>
-            <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10">完整创建</button>
-            <button type="button" data-example="请在FR100创建一块14mm厚的板架，边界 >SL10">缺少材料</button>
+            <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10 <LV5">智能创建</button>
+            <button type="button" data-example="请在主甲板创建一块14mm厚的AH36板架，边界 >SL10">定位面歧义</button>
+            <button type="button" data-example="请在FR999创建一块14mm厚的AH36板架，边界 >SL10">对象不存在</button>
             <button type="button" data-example="请解释AH36是什么材料">能力边界</button>
           </div>
 
@@ -98,12 +99,24 @@
             <span class="step-index">01</span>
             <span><strong>需求解析</strong><small>自然语言 → 参数</small></span>
           </li>
-          <li class="step" data-step="validate">
+          <li class="step" data-step="decision">
             <span class="step-index">02</span>
-            <span><strong>参数校验</strong><small>Schema validation</small></span>
+            <span><strong>Agent 决策</strong><small>选择下一步</small></span>
+          </li>
+          <li class="step" data-step="inspect">
+            <span class="step-index">03</span>
+            <span><strong>工程查询</strong><small>Mock context</small></span>
+          </li>
+          <li class="step" data-step="evaluate">
+            <span class="step-index">04</span>
+            <span><strong>Agent 评估</strong><small>观察后决策</small></span>
+          </li>
+          <li class="step" data-step="validate">
+            <span class="step-index">05</span>
+            <span><strong>安全校验</strong><small>Safety Gate</small></span>
           </li>
           <li class="step" data-step="cad">
-            <span class="step-index">03</span>
+            <span class="step-index">06</span>
             <span><strong>CAD 创建</strong><small id="backend-step-label">等待确认后端</small></span>
           </li>
         </ol>
@@ -133,6 +146,35 @@
               <span>05</span><strong>CAD Provider</strong><small>等待执行</small>
             </li>
           </ol>
+        </section>
+
+        <section class="decision-console" aria-labelledby="decision-heading">
+          <div class="trace-heading">
+            <div>
+              <span class="eyebrow">AGENT DECISION LOOP</span>
+              <h3 id="decision-heading">观察、决策与安全授权</h3>
+            </div>
+            <span id="project-context-label">MOCK PROJECT CONTEXT</span>
+          </div>
+          <div class="decision-layout">
+            <ol class="decision-timeline" id="decision-timeline">
+              <li class="decision-empty">等待 Agent 形成下一步决策…</li>
+            </ol>
+            <div class="inspection-panel">
+              <div class="inspection-heading">
+                <strong>工程对象查询</strong>
+                <span id="inspection-project">等待查询</span>
+              </div>
+              <ul id="inspection-results">
+                <li class="inspection-empty">尚未调用只读查询工具。</li>
+              </ul>
+              <div class="safety-gate neutral" id="safety-gate">
+                <span>SAFETY GATE</span>
+                <strong id="safety-gate-state">等待评估</strong>
+                <small id="safety-gate-reason">只有工程对象唯一匹配后才允许创建</small>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div class="result-grid">
