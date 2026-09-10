@@ -64,6 +64,23 @@ def extract_known_ruler_plane_name(user_input: str) -> str | None:
     return unique_matches[0] if len(unique_matches) == 1 else None
 
 
+def reference_plane_is_mentioned(value: str, user_input: str) -> bool:
+    """Check source evidence after boundary spans have been excluded."""
+    name = normalize_ruler_plane_name(value)
+    if not name:
+        return False
+    for pattern in (_CANONICAL_PLANE_PATTERN, _CHINESE_FRAME_PATTERN):
+        if any(
+            normalize_ruler_plane_name(match.group()) == name
+            for match in pattern.finditer(user_input)
+        ):
+            return True
+    return re.search(
+        r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])",
+        user_input,
+    ) is not None
+
+
 def _canonical_name_if_known(prefix: str, index: int) -> str | None:
     normalized_prefix = prefix.upper()
     minimum, maximum = RULER_PLANE_RANGES[normalized_prefix]

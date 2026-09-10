@@ -4,24 +4,25 @@
 
 本项目是面向船舶 CAD 结构设计的自然语言 Agent 原型。当前 MVP 只处理“创建板架（panel）”：从用户描述中抽取板架参数，解析当前工程中的定位面，校验参数后调用 CAD 工具。
 
-不要把当前原型描述为真实 CAD 集成。当前定位面目录和 CAD 创建后端均为 Mock；MCP/真实 CAD Provider 尚未接入。
+不要把当前原型描述为真实 CAD 集成。MCP STDIO Mock 协议已验证，真实 CAD Provider 尚未接入。列表请求支持 Direct Mock 和 MCP Contract Mock；本地实验契约 boundary_list_0.2.json 已按用户确认启用。旧四向契约仍被拦截。
 
 ## 当前执行链路
 
 入口为 `agent/main.py`，核心 LangGraph 在 `agent/graph.py`：
 
 1. `parse`：调用本地 Qwen，把用户输入解析为 `AgentActionPlan` JSON。
-2. `validate`：校验动作和板架基础参数；模型输出无效时最多重试 1 次。
-3. `resolve_plane`：优先依据用户原文，以确定性规则在工程定位面目录中匹配名称、别名或坐标。
-4. `cad`：仅当 `PanelRequest` 完整且定位面唯一解析成功时，调用 `create_panel()`。
+2. `validate`：校验动作与基础参数；从用户原文重放边界追加/替换，强制至少1条合法边界；模型结构无效时最多重试1次。
+3. 同一校验节点排除边界片段后处理定位面名称；已知 FR/SL/LV 规范化，未知名称直传。历史 Resolver 不参与主流程，不查询目录。
+4. `cad`：仅当 `PanelRequest` 完整、边界合法且不存在待澄清问题时，调用 `create_panel()`。
 
-安全边界：定位面未找到、歧义、名称/坐标冲突、参数缺失或校验失败时，必须停止并返回澄清信息，不得执行 CAD 创建。
+安全边界：参数缺失、边界非法或修改不明确时停止并澄清；Provider 拒绝和运行异常返回受控错误。对象存在性和几何有效性由未来 Provider/CAD 判断，当前 Mock 成功不证明工程对象存在。
 
 ## 目录职责
 
 - `agent/`：LangGraph 编排、共享状态、CLI 和多轮补充逻辑。
 - `schemas/`：Pydantic 领域契约。跨层数据优先使用这里的强类型模型。
-- `tools/reference_plane_tools.py`：定位面目录与确定性解析。目前目录由 `list_reference_planes()` 硬编码。
+- `tools/reference_plane_tools.py`：历史定位面目录与确定性解析，不在主 Graph 中。
+- `agent/boundary_session.py`：CLI/Web 共用的原文边界多轮规则。
 - `tools/cad_tools.py`：稳定 CAD 工具契约、后端协议和 Mock 后端。
 - `llm/qwen_client.py`：通过 Ollama HTTP API 调用本地 `qwen2.5:7b`。
 - `tests/`：基于标准库 `unittest` 的单元测试和本地端到端测试。
@@ -38,7 +39,7 @@ python -m pip install -r requirements.txt
 完整运行需要本地 Ollama 服务监听 `http://localhost:11434/api/chat`，并准备模型 `qwen2.5:7b`。运行单次请求：
 
 ```powershell
-python -m agent.main "在 FR100 创建板架，厚度 14mm，材料 AH36"
+python -m agent.main "在 FR100 创建板架，厚度 14mm，材料 AH36，边界 >SL10"
 ```
 
 不传请求参数时进入最多 3 轮补充的交互模式：
@@ -70,7 +71,7 @@ python run_tests.py
 - `MockCadBackend` 只生成随机对象 ID，不创建真实模型。
 - Qwen 地址、模型名和超时时间目前写在 `LocalQwen` 默认字段中，尚未配置化。
 - 当前只支持 `create_panel`；其他意图必须返回 unsupported，不能隐式扩展执行范围。
-- 定位面缓存、工程切换、稳定 object ID、超时/重试/幂等、MCP Schema 与真实 CAD 集成仍待实现。
+- 定位面缓存、工程切换、稳定 object ID、幂等和真实 CAD 集成仍待实现。MCP 超时与异常映射已有回归，新版数组契约已启用，对象匹配仍待实现。
 
 详细设计依据见 `Doc/Plan/Panel_Schema与定位面解析流程详细讲解_v1.0.md` 和 `Doc/Plan/AI_Ship_CAD_Copilot_Agent工程化实现阶段详细计划_v1.0.md`。
 
@@ -80,7 +81,7 @@ python run_tests.py
 
 后续主线为：完善参数/边界解析与校验；完善 Mock CAD 和稳定 Provider 契约；设计 MCP 并打通 Python Agent 与 C++ CAD 软件；在核心执行链稳定后引入 RAG。
 
-最终 CAD 模型必须由 C++ CAD 软件创建。Python Agent 只负责自然语言理解、流程编排、参数校验和工具调用，不得替代正式 CAD 几何建模。当前明确不做前端（FE）、自动强度设计、stiffener（扶强材）以及其他结构类型扩展。
+最终 CAD 模型必须由 C++ CAD 软件创建。Python Agent 只负责自然语言理解、流程编排、参数校验和工具调用，不得替代正式 CAD 几何建模。现有 Web 仅为本地演示工作台；不扩展正式 CAD 前端、自动强度设计、stiffener（扶强材）和其他结构类型。
 
 ## 架构与责任边界
 

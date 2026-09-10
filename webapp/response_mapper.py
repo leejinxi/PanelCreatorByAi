@@ -8,7 +8,6 @@ from webapp.schemas import (
     AgentRunResponse,
     AgentRunStatus,
     AgentStepView,
-    BoundaryView,
     CadResultView,
     ExecutionMode,
     ExecutionTraceView,
@@ -69,15 +68,16 @@ def _map_panel(state: Mapping[str, Any]) -> PanelView | None:
     boundaries = data.get("boundaries")
     if hasattr(boundaries, "model_dump"):
         boundaries = boundaries.model_dump()
-    if not isinstance(boundaries, Mapping):
-        boundaries = {}
+    if not isinstance(boundaries, list):
+        boundaries = []
 
     try:
         return PanelView(
             reference_name=_optional_text(data.get("reference_plane")),
             thickness_mm=data.get("thickness"),
             material=_optional_text(data.get("material")),
-            boundaries=BoundaryView.model_validate(boundaries),
+            boundaries=boundaries,
+            boundary_issues=getattr(state.get('boundary_result'), 'issues', []),
         )
     except ValidationError:
         return None
@@ -215,7 +215,7 @@ def _build_execution_trace(
 
     if status == "clarification":
         schema_status = "attention"
-        schema_summary = "必填参数不完整，已停止 CAD 调用"
+        schema_summary = "参数缺失或存在待修正问题，已停止 CAD 调用"
     elif status == "unsupported":
         schema_status = "skipped"
         schema_summary = "当前意图不属于 create_panel"
@@ -247,13 +247,13 @@ def _build_execution_trace(
         mcp_summary = "当前使用 Direct Mock，未经过 MCP"
     elif mcp_request is None:
         mcp_status = "skipped"
-        mcp_summary = "安全路由已阻止 MCP 调用"
+        mcp_summary = "本地校验或配置检查已阻止 MCP 调用"
     elif cad_result is not None and cad_result.success:
         mcp_status = "success"
         mcp_summary = "tools/call 已通过 STDIO 完成"
     else:
         mcp_status = "error"
-        mcp_summary = "MCP 已调用并返回失败"
+        mcp_summary = "MCP 已返回业务失败" if mcp_response else "已尝试 MCP 调用，未获得有效结果"
 
     if mode == "mcp":
         provider = "contract-mock"
@@ -265,7 +265,13 @@ def _build_execution_trace(
         provider = "unconfigured"
         provider_label = "未配置 Provider"
 
-    if cad_result is not None:
+    if mode == 'mcp' and mcp_request is None:
+        provider_status = 'skipped'
+        provider_summary = '未调用 CAD Provider'
+    elif mode == 'mcp' and mcp_response is None:
+        provider_status = 'attention'
+        provider_summary = '未确认 Provider 执行结果，请勿自动重复创建'
+    elif cad_result is not None:
         provider_status = "success" if cad_result.success else "error"
         provider_summary = (
             "返回模拟对象 ID，未修改真实 CAD"

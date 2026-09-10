@@ -24,6 +24,7 @@ class AgentStateTests(unittest.TestCase):
 
     def test_state_can_carry_strongly_typed_schema_objects(self) -> None:
         request = PanelRequest(
+            boundaries=[{"operator": ">", "target": "SL10"}],
             reference_plane="FR100",
             thickness=14,
             material="AH36",

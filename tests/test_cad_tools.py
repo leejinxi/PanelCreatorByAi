@@ -16,6 +16,7 @@ from tools.mcp_cad_backend import McpCadBackend
 
 def make_panel_request() -> PanelRequest:
     return PanelRequest(
+        boundaries=[{"operator": ">", "target": "SL10"}],
         reference_plane="FR100",
         thickness=14,
         material="AH36",

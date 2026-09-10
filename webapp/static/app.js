@@ -32,10 +32,6 @@ const parameterFields = {
   referenceName: document.querySelector("#reference-name"),
   thicknessMm: document.querySelector("#thickness"),
   material: document.querySelector("#material"),
-  top: document.querySelector("#boundary-top"),
-  bottom: document.querySelector("#boundary-bottom"),
-  left: document.querySelector("#boundary-left"),
-  right: document.querySelector("#boundary-right"),
 };
 
 const resultElements = {
@@ -151,16 +147,27 @@ function displayValue(value, fallback = "—") {
 }
 
 function renderPanel(panel) {
-  const boundaries = panel?.boundaries ?? {};
+  const boundaries = panel?.boundaries ?? [];
   const referenceName = displayValue(panel?.referenceName);
 
   parameterFields.referenceName.textContent = referenceName;
   parameterFields.thicknessMm.textContent = displayValue(panel?.thicknessMm);
   parameterFields.material.textContent = displayValue(panel?.material);
-  parameterFields.top.textContent = displayValue(boundaries.top, "未指定");
-  parameterFields.bottom.textContent = displayValue(boundaries.bottom, "未指定");
-  parameterFields.left.textContent = displayValue(boundaries.left, "未指定");
-  parameterFields.right.textContent = displayValue(boundaries.right, "未指定");
+  document.querySelector("#boundary-count").textContent = `有效边界 ${boundaries.length} / 至少1条`;
+  const list = document.querySelector("#boundary-list");
+  list.replaceChildren();
+  boundaries.forEach((boundary) => {
+    const item = document.createElement("li");
+    item.textContent = `${boundary.operator}${boundary.target} · 格式有效`;
+    list.append(item);
+  });
+  const issues = document.querySelector("#boundary-issues");
+  issues.replaceChildren();
+  (panel?.boundary_issues || []).forEach((issue) => {
+    const item = document.createElement("li");
+    item.textContent = issue.message;
+    issues.append(item);
+  });
   parameterState.textContent = panel ? "已提取" : "等待解析";
 }
 
@@ -248,8 +255,10 @@ function renderResult(payload) {
   awaitingClarification = payload.status === "clarification";
   sessionNote.hidden = !awaitingClarification;
   input.placeholder = awaitingClarification
-    ? "请补充缺少的信息，例如：材料为 AH36"
-    : "例如：请在第100肋位创建一块14mm厚的AH36板架";
+    ? (payload.panel?.boundary_issues?.length
+      ? "例如：边界 >SL10；修正已有边界可输入：边界全部改为 >SL10"
+      : "请补充缺少的信息，例如：材料为 AH36")
+    : "例如：请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10";
   submitLabel.textContent = awaitingClarification ? "提交补充信息" : "解析并创建";
 }
 
@@ -389,7 +398,7 @@ function resetSession() {
   awaitingClarification = false;
   input.value = "";
   input.disabled = false;
-  input.placeholder = "例如：请在第100肋位创建一块14mm厚的AH36板架";
+  input.placeholder = "例如：请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10";
   inputError.textContent = "";
   sessionNote.hidden = true;
   submitLabel.textContent = "解析并创建";
@@ -448,7 +457,7 @@ function registerWebMcpTool() {
               type: "string",
               minLength: 1,
               maxLength: 2000,
-              description: "包含定位面、厚度和材料的板架创建需求。",
+              description: "包含定位面、厚度、材料及至少一条边界（如 >SL10）的板架创建需求。",
             },
           },
           required: ["message"],

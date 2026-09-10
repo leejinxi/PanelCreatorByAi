@@ -1,4 +1,5 @@
 from typing import Any, Literal
+from schemas.boundary_schema import BoundaryConstraint, BoundaryValidationIssue
 
 from pydantic import (
     BaseModel,
@@ -138,7 +139,8 @@ class PanelView(BaseModel):
         serialization_alias="thicknessMm",
     )
     material: str | None = None
-    boundaries: BoundaryView = Field(default_factory=BoundaryView)
+    boundaries: list[BoundaryConstraint] = Field(default_factory=list)
+    boundary_issues: list[BoundaryValidationIssue] = Field(default_factory=list)
 
 
 class CadResultView(BaseModel):

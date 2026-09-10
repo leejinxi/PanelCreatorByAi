@@ -1,0 +1,169 @@
+{
+  "contractType": "locally-authored-experimental-contract",
+  "server": {
+    "name": "auto-struct-builder-contract-mock",
+    "version": "0.2.0"
+  },
+  "contractVersion": "0.2-poc",
+  "status": "confirmed",
+  "disclaimer": "Confirmed for local MCP STDIO mock demonstration only. Does not validate object existence or create real CAD geometry. Not a company CAD API contract.",
+  "tools": [
+    {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "referenceName",
+          "thicknessMm",
+          "material",
+          "boundaries"
+        ],
+        "properties": {
+          "thicknessMm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "material": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": ".*\\S.*"
+          },
+          "boundaries": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "operator",
+                "target"
+              ],
+              "properties": {
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "<",
+                    ">"
+                  ]
+                },
+                "target": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": ".*\\S.*"
+                }
+              }
+            }
+          },
+          "referenceName": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": ".*\\S.*"
+          }
+        }
+      },
+      "name": "create_panel",
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "message",
+          "objectId",
+          "errorCode"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "objectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "success": {
+                "const": true
+              },
+              "objectId": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": ".*\\S.*"
+              },
+              "errorCode": {
+                "type": "null"
+              }
+            }
+          },
+          {
+            "properties": {
+              "success": {
+                "const": false
+              },
+              "objectId": {
+                "type": "null"
+              },
+              "errorCode": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": ".*\\S.*"
+              }
+            }
+          }
+        ]
+      },
+      "description": "Create a panel in the active CAD project (local contract mock).",
+      "mockResponses": [
+        {
+          "name": "reference-not-found",
+          "result": {
+            "success": false,
+            "message": "Mock CAD reference plane not found.",
+            "errorCode": "REFERENCE_PLANE_NOT_FOUND",
+            "objectId": null
+          },
+          "match": {
+            "referenceName": "MISSING"
+          }
+        },
+        {
+          "name": "cad-unavailable",
+          "result": {
+            "success": false,
+            "message": "Mock CAD unavailable.",
+            "errorCode": "CAD_UNAVAILABLE",
+            "objectId": null
+          },
+          "match": {
+            "material": "UNAVAILABLE"
+          }
+        },
+        {
+          "name": "default-success",
+          "result": {
+            "success": true,
+            "message": "Mock MCP created panel.",
+            "errorCode": null,
+            "objectId": "mock-mcp-panel-001"
+          },
+          "match": {}
+        }
+      ]
+    }
+  ],
+  "confirmedDate": "2026-09-10"
+}

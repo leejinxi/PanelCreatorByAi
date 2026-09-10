@@ -5,13 +5,16 @@ from langgraph.graph import END, StateGraph
 from pydantic import ValidationError
 
 from agent.state import AgentState
+from agent.boundary_session import resolve_boundary_session, recover_missing_scalars
 from llm.qwen_client import LocalQwen, LocalQwenError
 from schemas.agent_action_schema import AgentActionPlan
 from schemas.panel_schema import PanelRequest
 from tools.cad_tools import create_panel
+from tools.boundary_tools import mask_boundary_text
 from tools.ruler_plane_tools import (
     extract_known_ruler_plane_name,
     normalize_ruler_plane_name,
+    reference_plane_is_mentioned,
 )
 
 
@@ -39,12 +42,7 @@ def parse_structure(state: AgentState) -> dict:
     "panel": {{
         "type": "panel",
         "reference_plane": null,
-        "boundaries": {{
-            "top": null,
-            "bottom": null,
-            "left": null,
-            "right": null
-        }},
+        "boundaries": [],
         "thickness": null,
         "material": null
     }}
@@ -59,12 +57,13 @@ def parse_structure(state: AgentState) -> dict:
 要求：
 1. 只有用户明确表达创建意图时，action 才能是 create_panel。
 2. thickness 使用毫米数值。
-3. 无法确定的边界填写 null。
+3. boundaries 固定返回空数组；边界将由程序从用户原文确定性解析，不要提取或补造边界。
 4. 已知标尺面范围为：X轴 FR-10 至 FR200、Y轴 SL-40 至 SL40、Z轴 LV-5 至 LV50。
 5. 用户使用“第N肋位”或“N号肋位”且 N 在 -10 至 200 范围内时，转换为 FRN，例如“第100肋位”返回 FR100。
 6. FR、SL、LV 标尺面统一使用大写前缀并移除前缀与数字之间的空格。
 7. 其他工程名称保留原文，不要自行改名；X=10000 等坐标表达式也保留原文。
 8. 不得虚构 reference_plane、thickness 或 material，无法确定时填写 null。
+9. 多轮补充只修改用户明确修正的字段，保留历史需求中的其他参数。
 """
 
     retry_count = state.get("retry_count", 0)
@@ -136,6 +135,9 @@ def validate_structure(state: AgentState) -> dict:
             error_code="LLM_INVALID_JSON",
         )
 
+    # Boundary authority is the user source, not the model's proposed list.
+    if data.get('action') == 'create_panel' and isinstance(data.get('panel'), dict):
+        data['panel']['boundaries'] = []
     try:
         action_plan = AgentActionPlan.model_validate(data)
     except ValidationError as exc:
@@ -160,28 +162,42 @@ def validate_structure(state: AgentState) -> dict:
         }
 
     data = action_plan.panel.model_dump()
+    boundary_result = resolve_boundary_session(state["user_input"])
+    data["boundaries"] = [item.model_dump() for item in boundary_result.boundaries]
 
+    reference_text = mask_boundary_text(state["user_input"])
+    recover_missing_scalars(data, reference_text)
     reference_plane = data.get("reference_plane")
+    # A model must not promote a boundary target to a positioning plane.
+    if (
+        reference_text != state["user_input"]
+        and isinstance(reference_plane, str)
+        and not reference_plane_is_mentioned(reference_plane, reference_text)
+    ):
+        reference_plane = None
+        data["reference_plane"] = None
     if isinstance(reference_plane, str) and reference_plane.strip():
         data["reference_plane"] = normalize_ruler_plane_name(
             reference_plane
         )
     else:
         extracted_plane = extract_known_ruler_plane_name(
-            state["user_input"]
+            reference_text
         )
         if extracted_plane is not None:
             data["reference_plane"] = extracted_plane
 
     missing_fields = _find_missing_required_fields(data)
-    if missing_fields:
+    if missing_fields or boundary_result.issues:
+        prompts = []
+        if missing_fields:
+            prompts.append(f"创建板架还需要提供：{'、'.join(missing_fields)}。")
+        prompts.extend(issue.message for issue in boundary_result.issues)
         return {
             "action_plan": action_plan,
             "structure_json": data,
-            "clarification": (
-                "创建板架还需要提供："
-                f"{'、'.join(missing_fields)}。"
-            ),
+            "clarification": "；".join(prompts),
+            "boundary_result": boundary_result,
             "error": None,
             "error_code": None,
             "retryable_error": False,
@@ -206,6 +222,7 @@ def validate_structure(state: AgentState) -> dict:
         "action_plan": action_plan,
         "structure_json": data,
         "panel_request": panel_request,
+        "boundary_result": boundary_result,
         "clarification": None,
         "error": None,
         "error_code": None,

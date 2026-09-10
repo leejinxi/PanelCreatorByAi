@@ -17,7 +17,7 @@ class LocalOllamaEndToEndTests(unittest.TestCase):
             {
                 "user_input": (
                     "请在第100肋位创建一块厚度为14mm、"
-                    "材料为AH36的板架"
+                    "材料为AH36的板架，边界 >SL10"
                 )
             }
         )

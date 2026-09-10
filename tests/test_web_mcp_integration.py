@@ -10,6 +10,8 @@ import httpx
 
 from mcp_client.stdio_client import StdioMcpClient
 from webapp.app import create_app
+from agent.main import build_accumulated_request
+from tests.contract_fixture import confirmed_boundary_contract
 
 
 graph_module = importlib.import_module("agent.graph")
@@ -22,7 +24,7 @@ def model_output(**overrides) -> str:
         "reference_plane": "第100肋位",
         "thickness": 14,
         "material": "AH36",
-        "boundaries": {"top": "DECK-A", "bottom": None, "left": None, "right": None},
+        "boundaries": [{"operator": ">", "target": "DECK-A"}],
     }
     panel.update(overrides)
     return json.dumps({"action": "create_panel", "panel": panel}, ensure_ascii=False)
@@ -32,7 +34,7 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         environment = patch.dict("os.environ", {
             "CAD_BACKEND": "mcp",
-            "MCP_CONTRACT_PATH": str(CONTRACT),
+            "MCP_CONTRACT_PATH": "",
             "MCP_TIMEOUT_SECONDS": "10",
         })
         environment.start()
@@ -45,9 +47,12 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(self.client.aclose)
 
     async def run_output(self, output: str) -> dict:
+        panel = json.loads(output).get("panel") or {}
+        reference = panel.get("reference_plane") or ""
+        message = f"在{reference}创建板架，边界 >DECK-A"
         with patch.object(type(graph_module.llm), "invoke", return_value=output):
             response = await self.client.post(
-                "/api/agent/runs", json={"message": "请创建板架"},
+                "/api/agent/runs", json={"message": message},
             )
         self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
@@ -66,11 +71,11 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call.call_args.args[1], "create_panel")
         self.assertEqual(call.call_args.args[2], {
             "referenceName": "FR100", "thicknessMm": 14.0, "material": "AH36",
-            "boundaries": {"top": "DECK-A", "bottom": None, "left": None, "right": None},
+            "boundaries": [{"operator": ">", "target": "DECK-A"}],
         })
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["panel"]["referenceName"], "FR100")
-        self.assertEqual(result["panel"]["boundaries"]["top"], "DECK-A")
+        self.assertEqual(result["panel"]["boundaries"][0]["target"], "DECK-A")
         self.assertEqual(result["cad_result"]["object_id"], "mock-mcp-panel-001")
         self.assertIn("模拟", result["message"])
         self.assertIn("模拟", result["cad_result"]["message"])
@@ -83,6 +88,7 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trace["provider"], "contract-mock")
         self.assertTrue(trace["simulated"])
         self.assertEqual(trace["mcp_request"]["tool"], "create_panel")
+        self.assertEqual(trace['mcp_request']['contract_version'], '0.2-poc')
         self.assertEqual(
             trace["mcp_request"]["arguments"]["referenceName"],
             "FR100",
@@ -99,6 +105,26 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         result = await self.run_output(model_output(reference_plane="MISSING"))
         self.assertEqual(result["panel"]["referenceName"], "MISSING")
         self.assert_cad_error(result, "REFERENCE_PLANE_NOT_FOUND")
+
+    async def test_boundary_clarification_then_real_stdio_creation(self):
+        turns = ['在FR100创建14mm厚AH36板架']
+        with (patch.object(type(graph_module.llm), 'invoke', return_value=model_output()),
+              patch.object(StdioMcpClient, 'call_tool', autospec=True,
+                           side_effect=StdioMcpClient.call_tool) as call):
+            for message in (turns[0], turns[0] + '，边界 >=SL10'):
+                result = (await self.client.post('/api/agent/runs', json={'message': message})).json()
+                self.assertEqual(result['status'], 'clarification')
+                self.assertIsNone(result['execution_trace']['mcp_request'])
+                call.assert_not_called()
+            turns.append('边界 >SL10')
+            result = (await self.client.post('/api/agent/runs', json={
+                'message': build_accumulated_request(turns),
+            })).json()
+            self.assertEqual(result['status'], 'success')
+            call.assert_called_once()
+            self.assertEqual(result['execution_trace']['mcp_request']['arguments']['boundaries'],
+                             [{'operator': '>', 'target': 'SL10'}])
+            self.assertEqual(result['execution_trace']['mcp_request']['contract_version'], '0.2-poc')
 
     async def test_real_stdio_cad_unavailable(self) -> None:
         result = await self.run_output(model_output(material="UNAVAILABLE"))

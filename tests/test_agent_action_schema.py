@@ -13,7 +13,7 @@ class AgentActionPlanTests(unittest.TestCase):
                 "panel": {
                     "type": "panel",
                     "reference_plane": "FR100",
-                    "boundaries": {},
+                    "boundaries": [],
                     "thickness": 14,
                     "material": "AH36",
                 },

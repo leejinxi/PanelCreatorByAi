@@ -28,14 +28,14 @@ def record_llm(duration_ms: int) -> None:
         trace["llm_duration_ms"] = max(0, duration_ms)
 
 
-def record_mcp_request(arguments: dict[str, Any]) -> None:
+def record_mcp_request(arguments: dict[str, Any], contract_version: str) -> None:
     trace = _TRACE.get()
     if trace is not None:
         trace["mcp_request"] = {
             "transport": "stdio",
             "method": "tools/call",
             "tool": "create_panel",
-            "contract_version": "0.1-poc",
+            "contract_version": contract_version,
             "arguments": deepcopy(arguments),
         }
 

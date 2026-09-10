@@ -22,6 +22,7 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
             self.received_messages.append(message)
             return {
                 "panel_request": PanelRequest(
+                    boundaries=[{"operator": ">", "target": "SL10"}],
                     reference_plane="FR100",
                     thickness=14,
                     material="AH36",

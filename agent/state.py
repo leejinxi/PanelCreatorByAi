@@ -2,6 +2,7 @@ from typing import Any, NotRequired, Required, TypedDict
 
 from schemas.agent_action_schema import AgentActionPlan
 from schemas.panel_schema import CadExecutionResult, PanelRequest
+from schemas.boundary_schema import BoundaryParseResult
 
 
 class AgentState(TypedDict, total=False):
@@ -34,3 +35,4 @@ class AgentState(TypedDict, total=False):
 
     # 为后续 JSON 修复或模型重试预留
     retry_count: NotRequired[int]
+    boundary_result: NotRequired[BoundaryParseResult]

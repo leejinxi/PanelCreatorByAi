@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MCP_CONTRACT_PATH = (
     Path(__file__).resolve().parents[1]
     / "contracts"
-    / "FULL_contract_with_data.json"
+    / "boundary_list_0.2.json"
 )
 DEFAULT_MCP_TIMEOUT_SECONDS = 10.0
 

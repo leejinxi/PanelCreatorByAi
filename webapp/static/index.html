@@ -37,7 +37,7 @@
         <div class="section-heading">
           <span class="eyebrow">01 / COMMAND</span>
           <h1 id="request-heading">描述要创建的板架</h1>
-          <p>输入定位面、厚度和材料，Agent 将整理参数并提交 CAD。</p>
+          <p>输入定位面、厚度、材料和至少一条边界，Agent 校验后提交模拟创建。</p>
         </div>
 
         <form id="request-form" novalidate>
@@ -48,7 +48,7 @@
               name="request"
               rows="6"
               maxlength="2000"
-              placeholder="例如：请在第100肋位创建一块14mm厚的AH36板架"
+              placeholder="例如：请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10"
               required
             ></textarea>
             <span class="character-count"><b id="character-count">0</b> / 2000</span>
@@ -57,8 +57,8 @@
 
           <div class="examples" aria-label="示例需求">
             <span>快速示例</span>
-            <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架">完整创建</button>
-            <button type="button" data-example="请在FR100创建一块14mm厚的板架">缺少材料</button>
+            <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10">完整创建</button>
+            <button type="button" data-example="请在FR100创建一块14mm厚的板架，边界 >SL10">缺少材料</button>
             <button type="button" data-example="请解释AH36是什么材料">能力边界</button>
           </div>
 
@@ -158,15 +158,11 @@
             </dl>
 
             <div class="boundary-heading">
-              <span>四向边界</span>
-              <small>允许暂时为空</small>
+              <span>板架边界</span>
+              <small id="boundary-count">有效边界 0 / 至少1条</small>
             </div>
-            <dl class="boundary-grid">
-              <div><dt>TOP</dt><dd id="boundary-top">未指定</dd></div>
-              <div><dt>BOTTOM</dt><dd id="boundary-bottom">未指定</dd></div>
-              <div><dt>LEFT</dt><dd id="boundary-left">未指定</dd></div>
-              <div><dt>RIGHT</dt><dd id="boundary-right">未指定</dd></div>
-            </dl>
+            <ol id="boundary-list"></ol>
+            <ul id="boundary-issues" aria-live="polite"></ul>
           </section>
         </div>
 

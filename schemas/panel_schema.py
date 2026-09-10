@@ -1,4 +1,5 @@
 from typing import Literal
+from schemas.boundary_schema import BoundaryConstraint, ValidatedBoundaries
 
 from pydantic import (
     BaseModel,
@@ -38,8 +39,13 @@ class PanelRequest(BaseModel):
     type: Literal["panel"] = "panel"
     reference_plane: str
 
-    # default_factory=PanelBoundaries 表示没有提供边界时，每次创建一个新的空边界对象
-    boundaries: PanelBoundaries = Field(default_factory=PanelBoundaries)
+    # 执行请求必须包含至少一条有效边界，不接受旧版四向对象。
+    boundaries: list[BoundaryConstraint] = Field(min_length=1)
+
+    @field_validator("boundaries")
+    @classmethod
+    def validate_boundaries(cls, value: list[BoundaryConstraint]) -> list[BoundaryConstraint]:
+        return ValidatedBoundaries(boundaries=value).boundaries
     thickness: float = Field(
         gt=0,
         allow_inf_nan=False,

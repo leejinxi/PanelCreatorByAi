@@ -22,6 +22,7 @@ class WebResponseMapperTests(unittest.TestCase):
             {
                 "llm_raw_output": "private prompt output",
                 "panel_request": PanelRequest(
+                    boundaries=[{"operator": ">", "target": "SL10"}],
                     reference_plane="FR100",
                     thickness=14,
                     material="AH36",
@@ -46,7 +47,7 @@ class WebResponseMapperTests(unittest.TestCase):
                         "referenceName": "FR100",
                         "thicknessMm": 14,
                         "material": "AH36",
-                        "boundaries": {},
+                        "boundaries": [],
                     },
                 },
                 "mcp_response": {
@@ -82,6 +83,7 @@ class WebResponseMapperTests(unittest.TestCase):
             {
                 "llm_raw_output": "sensitive-debug-output",
                 "panel_request": PanelRequest(
+                    boundaries=[{"operator": ">", "target": "SL10"}],
                     reference_plane="FR100",
                     thickness=14,
                     material="AH36",
@@ -113,7 +115,7 @@ class WebResponseMapperTests(unittest.TestCase):
                 "structure_json": {
                     "type": "panel",
                     "reference_plane": "FR100",
-                    "boundaries": {},
+                    "boundaries": [],
                     "thickness": 14,
                     "material": None,
                 },
@@ -159,6 +161,7 @@ class WebResponseMapperTests(unittest.TestCase):
         response = map_agent_state(
             {
                 "panel_request": PanelRequest(
+                    boundaries=[{"operator": ">", "target": "SL10"}],
                     reference_plane="FR100",
                     thickness=14,
                     material="AH36",

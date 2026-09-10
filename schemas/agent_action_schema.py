@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from schemas.panel_schema import PanelBoundaries
+from schemas.boundary_schema import BoundaryConstraint
 
 
 class PanelCandidate(BaseModel):
@@ -12,7 +12,7 @@ class PanelCandidate(BaseModel):
 
     type: Literal["panel"] = "panel"
     reference_plane: str | None = None
-    boundaries: PanelBoundaries = Field(default_factory=PanelBoundaries)
+    boundaries: list[BoundaryConstraint] = Field(default_factory=list)
     thickness: float | None = Field(default=None, allow_inf_nan=False)
     material: str | None = None
 

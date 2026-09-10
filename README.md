@@ -1,77 +1,75 @@
 # AI Ship CAD Copilot
 
-一个面向船舶结构设计的自然语言 CAD Agent 原型。当前 MVP 支持从中文需求中抽取板架参数，并通过直接 Mock 或本地 MCP Contract Mock 模拟创建板架。
+面向船舶结构设计的自然语言板架创建原型。当前支持 Direct Mock 和 MCP STDIO Contract Mock 模拟创建，尚未连接真实 CAD。
 
 ## 当前能力
 
-- 识别“创建板架”意图并拒绝不支持的任务。
-- 抽取厚度、材料、四向边界和定位面。
-- 将已知标尺面（FR/SL/LV）表达规范化；未知定位面名称原文交给 CAD Backend 判断。
-- 通过 CAD Backend 返回定位面不存在、CAD 不可用等稳定错误码。
-- 参数不完整时支持最多 3 轮命令行补充。
-- 使用 Pydantic 契约阻止未经校验的数据进入 CAD 层。
+- 创建板架意图识别、定位面名称规范化、厚度和材料抽取。
+- 必须提供至少一条边界，如 >SL10；符号只保留并传递，不解释几何关系。
+- 原文确定性解析、去重、缺参澄清及多轮边界追加/替换。
+- CLI 与浏览器共用同一 Graph；Web 展示动态边界列表、问题和执行 Trace。
 
-当前 `tools/cad_tools.py` 的默认后端是 Direct Mock；本地 MCP Contract Mock 可通过配置启用，尚未连接真实 CAD。
+## 本地运行
 
-## 快速开始
-
-环境建议：Python 3.11、Ollama、`qwen2.5:7b`。
-
-```powershell
+~~~powershell
+conda activate ai_cad_agent
+python --version
 python -m pip install -r requirements.txt
 ollama pull qwen2.5:7b
-python -m agent.main "在 FR100 创建板架，厚度 14mm，材料 AH36"
-```
+$env:CAD_BACKEND = "mock"
+python -X utf8 -m agent.main "在FR100创建14mm厚AH36板架，边界 >SL10"
+~~~
 
-进入交互补充模式：
+Python 应为3.11，Ollama 服务需在本机运行。进入多轮补充：
 
-```powershell
-python -m agent.main
-```
+~~~powershell
+python -X utf8 -m agent.main
+~~~
 
-运行测试：
+先输入“在FR100创建14mm厚AH36板架”，系统应要求补充边界；再输入“边界 >SL10”即可继续校验并模拟创建。
 
-```powershell
-python run_tests.py
-```
+浏览器 MCP 演示（先用 Ctrl+C 停止旧网页服务）：
 
-启用本地 MCP Contract Mock：
-
-推荐使用一键演示脚本：
-
-```powershell
+~~~powershell
 powershell -ExecutionPolicy Bypass -File scripts/start_mcp_demo.ps1
-```
+~~~
 
-也可以手动设置环境变量：
+脚本使用 ai_cad_agent 环境并显式选择 MCP 后端。保持终端运行，刷新浏览器；顶部应显示 MCP Contract Mock。
 
-```powershell
+访问 http://127.0.0.1:8000 。
+
+## 边界追加与替换
+
+会话仍在澄清阶段时：
+
+- 追加：追加边界 <LV2
+- 单项替换：将 >SL10 改为 >SL12
+- 整体替换：边界全部改为 <LV8
+
+目标包含空格或分隔符时，用引号包裹，例如 <"Deck A"。PowerShell 的整条命令可用单引号包裹需求，以保留内部双引号。不要在 < 前加入反斜杠。
+
+## MCP 运行契约
+
+CAD_BACKEND=mcp 默认加载 contracts/boundary_list_0.2.json（已确认的本地实验契约），boundaries 为至少一条 operator/target 数组。MCP_CONTRACT_PATH 可显式覆盖；旧四向契约和未确认草案仍被拒绝。
+
+也可从已激活的 ai_cad_agent 终端手动启动：
+
+~~~powershell
 $env:CAD_BACKEND = "mcp"
-$env:MCP_CONTRACT_PATH = "contracts/FULL_contract_with_data.json"
-$env:MCP_TIMEOUT_SECONDS = "10"
+$env:MCP_CONTRACT_PATH = "contracts/boundary_list_0.2.json"
 python run_web.py
-```
+~~~
 
-## 架构概览
+创建成功时第四步显示 tools/call、耗时及 0.2-poc 请求，结果来自 STDIO Mock Server。未设置 CAD_BACKEND 时仍默认 Direct Mock。Mock 目前不查询边界对象，不验证几何，固定模拟 ID 不是持久化对象标识。
 
-```text
-用户输入
-  -> 本地 Qwen 结构化抽取
-  -> 动作与基础字段校验
-  -> 已知标尺面规范化，未知名称原文直传
-  -> PanelRequest 完整校验
-  -> CAD 工具适配层
-  -> Mock CAD Backend
-```
+旧 contracts/FULL_contract_with_data.json 和 boundary_list_0.2_draft.json 保留作历史/拒绝回归，不是当前演示入口。详细场景见 Doc/Plan/本地MCP演示操作手册_2026-09-10.md。
 
-核心代码：
+## 测试
 
-- `agent/main.py`：CLI 与多轮补充入口。
-- `agent/graph.py`：LangGraph 工作流与安全路由。
-- `schemas/`：动作、板架、定位面和执行结果的数据契约。
-- `tools/reference_plane_tools.py`：历史定位面解析模块，当前不参与主 Graph。
-- `tools/cad_tools.py`：CAD 工具契约和 Mock 后端。
-- `tools/mcp_cad_backend.py`：本地 MCP Contract Mock 适配器。
-- `llm/qwen_client.py`：Ollama/Qwen 客户端。
+~~~powershell
+python -X utf8 run_tests.py
+~~~
 
-浏览器页面会显示 `Direct Mock CAD` 或 `MCP Contract Mock`，两者都只模拟执行，不修改真实 CAD 工程。更完整的工程约定与已知限制见 `AGENTS.md`，设计资料与后续计划见 `Doc/Plan/` 和 `Doc/TODO.md`。
+默认隔离真实 Ollama/CAD，MCP 回归会启动本机 STDIO 子进程。真实 Ollama E2E 需显式设置 RUN_LOCAL_E2E=1。
+
+主逻辑见 agent/graph.py，边界多轮规则见 agent/boundary_session.py。最新完成度与待办见 Doc/current_status.md 和 Doc/TODO.md。

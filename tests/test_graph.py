@@ -33,7 +33,7 @@ class AgentGraphTests(unittest.TestCase):
         with patch.object(type(graph_module.llm), "invoke", return_value=output):
             return graph_module.graph.invoke(
                 {
-                    "user_input": "测试用户输入",
+                    "user_input": "在FR100创建板架，边界 >SL10",
                 }
             )
 
@@ -42,7 +42,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "FR100",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -57,7 +57,7 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "创建板架"}
+                {"user_input": "在FR100创建板架，边界 >SL10"}
             )
 
         self.assertIsInstance(result["panel_request"], PanelRequest)
@@ -73,7 +73,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": None,
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -86,7 +86,7 @@ class AgentGraphTests(unittest.TestCase):
                 return_value=output,
             ):
                 result = graph_module.graph.invoke(
-                    {"user_input": "请创建一块14mm厚AH36板架"}
+                    {"user_input": "请创建一块14mm厚AH36板架，边界 >SL10"}
                 )
 
         self.assertIn("定位面", result["clarification"])
@@ -98,7 +98,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": None,
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -113,7 +113,7 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "请在第100肋位创建14mm厚AH36板架"}
+                {"user_input": "请在第100肋位创建14mm厚AH36板架，边界 >SL10"}
             )
 
         self.assertEqual(result["panel_request"].reference_plane, "FR100")
@@ -126,7 +126,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "X=10000",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -141,7 +141,7 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "请在X=10000的位置创建14mm厚AH36板架"}
+                {"user_input": "请在X=10000的位置创建14mm厚AH36板架，边界 >SL10"}
             )
 
         self.assertEqual(result["panel_request"].reference_plane, "X=10000")
@@ -154,7 +154,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "第100肋位",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -169,7 +169,7 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "请在第100肋位创建14mm厚AH36板架"}
+                {"user_input": "请在第100肋位创建14mm厚AH36板架，边界 >SL10"}
             )
 
         self.assertEqual(
@@ -185,7 +185,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "UNKNOWN_PLANE_999",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -200,7 +200,7 @@ class AgentGraphTests(unittest.TestCase):
             ) as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "在UNKNOWN_PLANE_999创建板架"}
+                {"user_input": "在UNKNOWN_PLANE_999创建板架，边界 >SL10"}
             )
 
         self.assertIsNone(result["error"])
@@ -213,7 +213,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "FR100",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "",
             }
@@ -226,7 +226,7 @@ class AgentGraphTests(unittest.TestCase):
                 return_value=output,
             ):
                 result = graph_module.graph.invoke(
-                    {"user_input": "创建板架"}
+                    {"user_input": "在FR100创建板架，边界 >SL10"}
                 )
 
         self.assertIn("材料", result["clarification"])
@@ -238,7 +238,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "FR100",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -257,7 +257,7 @@ class AgentGraphTests(unittest.TestCase):
                 return_value=failure,
             ),
         ):
-            result = graph_module.graph.invoke({"user_input": "创建板架"})
+            result = graph_module.graph.invoke({"user_input": "在FR100创建板架，边界 >SL10"})
 
         self.assertEqual(result["cad_result"], failure)
         self.assertEqual(result["error"], "CAD 服务不可用")
@@ -268,7 +268,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "FR100",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": -5,
                 "material": "AH36",
             }
@@ -281,7 +281,7 @@ class AgentGraphTests(unittest.TestCase):
                 return_value=output,
             ):
                 result = graph_module.graph.invoke(
-                    {"user_input": "创建板架"}
+                    {"user_input": "在FR100创建板架，边界 >SL10"}
                 )
 
         self.assertIn("thickness", result["error"])
@@ -301,7 +301,7 @@ class AgentGraphTests(unittest.TestCase):
             {
                 "type": "panel",
                 "reference_plane": "FR100",
-                "boundaries": {},
+                "boundaries": [],
                 "thickness": 14,
                 "material": "AH36",
             }
@@ -319,7 +319,7 @@ class AgentGraphTests(unittest.TestCase):
                 return_value=SUCCESS_RESULT,
             ) as mocked_create_panel,
         ):
-            result = graph_module.graph.invoke({"user_input": "创建板架"})
+            result = graph_module.graph.invoke({"user_input": "在FR100创建板架，边界 >SL10"})
 
         self.assertEqual(mocked_invoke.call_count, 2)
         self.assertEqual(result["retry_count"], 1)
@@ -366,7 +366,7 @@ class AgentGraphTests(unittest.TestCase):
             patch.object(graph_module, "create_panel") as mocked_create_panel,
         ):
             result = graph_module.graph.invoke(
-                {"user_input": "创建板架"}
+                {"user_input": "在FR100创建板架，边界 >SL10"}
             )
 
         self.assertIn("本地模型调用失败", result["error"])

@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from agent.graph import graph
-from schemas.panel_schema import CadExecutionResult
+from schemas.panel_schema import CadExecutionResult, PanelRequest
 
 
 EXIT_COMMANDS = frozenset({"q", "quit", "exit", "退出"})
@@ -44,6 +44,10 @@ def format_agent_result(result: dict[str, Any]) -> str:
     if isinstance(cad_result, CadExecutionResult):
         if cad_result.success:
             lines = [f"创建成功：{cad_result.message}"]
+            panel = result.get('panel_request')
+            if isinstance(panel, PanelRequest):
+                lines.append(f"定位面：{panel.reference_plane}")
+                lines.append('边界：' + '、'.join(item.operator + item.target for item in panel.boundaries))
             if cad_result.object_id:
                 lines.append(f"CAD 对象 ID：{cad_result.object_id}")
             return "\n".join(lines)
