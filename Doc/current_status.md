@@ -2,7 +2,7 @@
 
 更新时间：2026-09-10
 
-代码基线：在 `a566430` 的边界与 MCP STDIO 模拟链路之上，已完成 Agent 决策展示增强；最终提交号见本次开发提交。
+代码基线：`880ffe6` — 在边界与 MCP STDIO 模拟链路之上，完成 Agent 决策展示增强、Mock 工程查询和 Safety Gate。
 
 最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python -B -X utf8 run_tests.py`，共184项，183项通过，1项真实 Ollama E2E 按设计跳过。
 
