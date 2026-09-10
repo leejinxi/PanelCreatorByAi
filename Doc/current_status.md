@@ -36,7 +36,7 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 
 - 已确认实验契约 `contracts/FULL_contract_with_data.json`，版本 `0.1-poc`，确认日期 2026-09-09。
 - 契约只定义 `create_panel`，包含输入/输出 JSON Schema 和成功、定位面不存在、CAD 不可用三类数据。
-- 输入拒绝空白定位面、材料和边界；输出强制成功/失败字段互斥。
+- 契约拒绝空白定位面、材料和边界字符串，但四向边界仍允许 null，尚未要求至少4条；输出强制成功/失败字段互斥。
 - 已实现 `mcp_mock/contract.py` 和独立 STDIO Mock MCP Server。
 - 已通过真实 MCP `initialize`、`tools/list`、`tools/call` 子进程回环测试。
 - 已实现 `mcp_client/stdio_client.py` 和 `tools/mcp_cad_backend.py`。
@@ -56,22 +56,37 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 - 公司端目前只有原生 CAD API，没有 MCP Server；真实接入仍需要公司侧 CAD Adapter/MCP Server。
 - 直接 Mock 失败注入尚未实现；MCP Contract Mock 的定位面失败和 CAD 不可用场景已覆盖。
 
+## 当前优先事项：板架边界必填与匹配
+
+方案：[板架边界必填与匹配实施方案 v1.0](Plan/板架边界必填与匹配实施方案_v1.0.md)。已生成并按用户反馈修订，尚未实施；当前代码与已确认的 `0.1-poc` 契约仍采用可空四向边界。
+
+用户已明确的要求：
+
+- 用户必须输入板架边界，至少4条；缺少或不足时提示补充，不能调用创建。
+- 每条形式为 `<` 或 `>` 加边界对象/标尺面，例如 `<SL10`、`>LV2`。
+- 标尺面处理与定位面一致：已知名称规范化，其他对象名称保留原文，由 CAD/Provider 判断。
+- 比较符仅保留并传递给 CAD，不理解符号与模型的关系，不判断正负侧、法向、闭合性或几何冲突。
+
+方案推荐细节：采用结构化边界列表支持超过4条；相同符号与规范化目标去重计数，同一目标不同符号分别保留；隔离定位面与边界的原文提取；在 Mock Provider 中模拟对象匹配。上述细节见方案，不能描述为已实现功能。
+
 ## 下一步计划
 
-1. 修订 `AGENTS.md` 与 `README.md` 中仍保留的旧定位面查询描述，统一为“已知标尺面规范化，未知名称原文交给 CAD 判定”。
-2. 增加 MCP 会话复用和更精确的协议错误分类，避免每次创建都冷启动子进程。
-3. 将 Ollama 端点、模型、超时及其他机器相关参数配置化，支持换机和内网部署。
-4. 等公司提供正式 CAD API 或 CAD Adapter/MCP Server 后，替换 Contract Mock，并保留现有回归测试。
+1. 边界 Step 1：设计候选/执行 Schema 和边界列表，完成确定性表达式解析、名称规范化与重复检查，避免边界标尺面污染定位面提取。
+2. 边界 Step 2：接入 Graph 必填与至少4条校验，支持多轮追加、明确替换和问题提示；比较符不作几何解释。
+3. 边界 Step 3：拟定并确认 `0.2-poc` 契约，联动 MCP、直接 Mock、对象匹配及 Trace 契约版本，保持旧版基线可追溯。
+4. 边界 Step 4：Web 改为动态边界列表，展示有效数量和逐项问题，完成成功、补充及失败回环验收，更新示例和操作文档。
+5. 多工具选择、候选对照及决策展示目前仅讨论，排在边界业务闭环之后。
+6. 后续再处理 `AGENTS.md`/`README.md` 旧描述、MCP 会话复用与错误分类、Ollama 配置化及真实 CAD Adapter 接入。
 
 ## 当前测试基线
 
-2026-09-09 在 Python 3.11.15 / `ai_cad_agent` 下验证：
+2026-09-10 提交 `7a957ec` 前，在 Python 3.11.15 / `ai_cad_agent` 下验证：
 
 ```powershell
 python -X utf8 run_tests.py
 ```
 
-结果：118 项运行，117 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。
+结果：118 项运行，117 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。这是边界新规则实施前的基线，本次方案与状态文档更新未修改代码、未重新运行测试。
 
 真实网页验收：`CAD_BACKEND=mcp` 下，真实 Qwen 成功解析“第100肋位、14mm、AH36”并经 MCP Contract Mock 返回模拟对象；缺少材料时页面进入澄清且跳过 CAD。
 
@@ -94,5 +109,6 @@ Python 应为 3.11，Ollama 应存在 `qwen2.5:7b`。开始修改前执行 `git 
 3. `Doc/Plan/本地MCP回环PoC阶段性报告_2026-09-09.md`
 4. `Doc/TODO.md`
 5. `contracts/FULL_contract_with_data.json`
-6. `Doc/Plan/内网mock数据生成.md`
+6. `Doc/Plan/板架边界必填与匹配实施方案_v1.0.md`（当前优先任务）
+7. `Doc/Plan/内网mock数据生成.md`
 
