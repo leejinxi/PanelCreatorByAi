@@ -2,6 +2,10 @@
 
 更新时间：2026-09-10
 
+代码基线：`a566430` — 实现板架边界必填与多轮修正，打通 MCP STDIO 模拟创建链路。已核对该提交；本次同步 Agent 决策展示方案、当前状态与待办。
+
+最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python -B -X utf8 run_tests.py`，共162项，161项通过，1项真实 Ollama E2E 按设计跳过。
+
 ## 当前阶段
 
 边界 Step 1–2 已接入主流程：用户必须提供至少1条合法边界；CLI/Web 共用按轮次重放的边界追加与替换规则。Direct Mock 与 MCP STDIO Contract Mock 均可完成本地成功与澄清流程，仍不创建真实 CAD 模型。
@@ -63,9 +67,14 @@ python -X utf8 -m agent.main
 第一轮应澄清边界，第二轮应模拟创建。网页 MCP 演示请先停止旧服务，再执行 powershell -ExecutionPolicy Bypass -File scripts/start_mcp_demo.ps1，访问 http://127.0.0.1:8000 并刷新页面。第四步应显示实际 tools/call 和耗时。
 测试追加/替换时可先不提供材料，使会话停留在澄清阶段；完成创建后下一次请求属于新的创建任务。
 
+模式排查：仅更新代码或刷新网页不会改变旧服务进程中的 CAD_BACKEND。若第四步显示 Direct Mock，应停止旧服务，用 MCP 脚本重启后重新提交请求；历史请求不会自动重新执行。可访问 /api/health 核对 mode=mcp、cad_backend=mcp-contract-mock。该接口只报告配置，不证明 STDIO 调用成功；实际执行以请求 Trace 中的 MCP Request/Response 为准。本次会话已在8000端口启动 MCP 模式并核对上述配置。
+
 ## 下一步
 
-1. 补齐 Direct Mock/Contract Mock 共用的对象匹配及失败场景；未知、歧义、不可用对象不能默认成功。
-2. 明确来源轮次与逐项匹配状态的完整 DTO；当前页面显示有效表达式和问题，尚未展示真实对象匹配状态。
-3. 对象匹配完成后补齐真实 Ollama 下的匹配澄清与拒绝验收；现有通信成功、补边界及自动化故障回归已通过。
-4. 后续处理会话复用、配置化、幂等/任务查询、公司 CAD Adapter。真实 CAD、几何验证、RAG 和多工具选择尚未实现。
+下一阶段改为 Demo 展示优先的 Agent 决策增强，实施依据见 [Agent 决策展示增强方案 v1.0](Plan/AI_Ship_CAD_Copilot_Agent决策展示增强方案_v1.0.md)。该方案当前仅完成设计，代码尚未实施。
+
+1. 定义最小工程对象与查询结果 DTO，新增一份精选 Demo 工程目录和 `inspect_project_context` 只读工具；复用这套匹配完成原 P0 的唯一命中、别名、未知、歧义、不可用及角色限制场景，不再另建第二套 Mock 对象匹配。
+2. 增加结构化 `AgentDecision`、决策历史和最多两步的受控决策链：查询前由安全策略决定先观察，查询后由 Qwen 在创建、澄清和停止中选择，并提供确定性 fallback 与 safety override。
+3. 增加 Safety Gate；只有 `PanelRequest` 有效、定位面及全部边界均唯一匹配、最终决策允许时才能调用 CAD。比较符继续原样透传，不作几何解释。
+4. 在 Web 透明执行台展示“需求理解 → Agent 决策 → Mock 工程查询 → Agent 评估 → 安全校验 → CAD 执行”，固定成功、歧义、不存在三个演示场景，并明确标注 Mock 数据源和 CAD 是否调用。
+5. 完成 Direct Mock 自动化与真实 Qwen 页面验收；MCP Contract Mock 的对象匹配按展示需要复用，真实 CAD、几何验证、RAG、多 Agent 和其他结构类型继续暂缓。
