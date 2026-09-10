@@ -1,14 +1,16 @@
 # AI Ship CAD Copilot 当前状态
 
-更新时间：2026-09-10
+更新时间：2026-09-11
 
-代码基线：`880ffe6` — 在边界与 MCP STDIO 模拟链路之上，完成 Agent 决策展示增强、Mock 工程查询和 Safety Gate。
+代码基线：`ecfbf8e` — 完成 Agent 决策展示增强，并修正 Direct Mock 与 MCP 调用状态的页面语义。
 
 最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python -B -X utf8 run_tests.py`，共184项，183项通过，1项真实 Ollama E2E 按设计跳过。
 
 ## 当前阶段
 
 Agent 决策展示增强已接入主流程。用户必须提供至少1条合法边界；参数校验后 Agent 先决定查询 Mock 工程上下文，再根据定位面和边界的逐项查询结果选择创建、澄清或停止。Direct Mock 与 MCP STDIO Contract Mock 均仍只模拟创建，不创建真实 CAD 模型。
+
+页面的 MCP Call Inspector 已区分运行模式：Direct Mock 成功时显示 `DIRECT MOCK COMPLETE` 和 `RESULT · Direct Mock`，明确说明该模式不产生 MCP Request/Response；只有真实发出 MCP 请求但无响应时才显示“未返回可确认结果”。Safety Gate 阻断和发送前契约/配置拦截也使用各自文案。
 
 PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认本轮优先打通通信后，新增已确认的本地实验契约 contracts/boundary_list_0.2.json，并作为 MCP 默认契约。旧 0.1-poc 与历史草案保留；显式使用它们仍在发送前被拦截。对象匹配未完成，不作为本轮通信验收的前提。
 

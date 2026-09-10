@@ -1,8 +1,8 @@
 # AI Ship CAD Copilot TODO
 
-更新时间：2026-09-10
+更新时间：2026-09-11
 
-已提交代码基线：`880ffe6` — 在板架边界与 MCP STDIO 模拟链路之上，完成 Agent 决策展示增强、Mock 工程查询和 Safety Gate。
+已提交代码基线：`ecfbf8e` — 完成 Agent 决策展示增强，并修正 Direct Mock 与 MCP 调用状态的页面语义。
 
 ## P0：板架边界必填与匹配（当前优先）
 
@@ -81,6 +81,7 @@
 
 ## P1：浏览器演示稳定性
 
+- [x] MCP Call Inspector 区分 Direct Mock 成功、Safety Gate 阻断、MCP 发送前拦截和已发送但无可确认响应，避免把“未经过 MCP”展示成 Provider 失败。
 - [x] 重新实现并验证可控 MCP Contract Mock 失败场景：CAD 不可用、定位面不存在。
 - [x] 请求期间锁定提交、新建会话和示例按钮。
 - [x] 每轮执行前清空旧参数、request ID 和 JSON 结果。
