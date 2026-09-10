@@ -108,6 +108,9 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("text/css", css_response.headers["content-type"])
         self.assertEqual(js_response.status_code, 200)
         self.assertIn("javascript", js_response.headers["content-type"])
+        self.assertIn("当前为 Direct Mock 模式，不经过 MCP tools/call", js_response.text)
+        self.assertIn("MCP Provider 未返回可确认结果", js_response.text)
+        self.assertNotIn('"MCP Provider 未返回结果。"', js_response.text)
 
     async def test_run_endpoint_returns_stable_response(self) -> None:
         response = await self.client.post(

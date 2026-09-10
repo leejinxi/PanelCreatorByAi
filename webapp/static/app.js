@@ -20,6 +20,7 @@ const traceTotal = document.querySelector("#trace-total");
 const mcpCallState = document.querySelector("#mcp-call-state");
 const mcpRequestOutput = document.querySelector("#mcp-request-output");
 const mcpResponseOutput = document.querySelector("#mcp-response-output");
+const mcpResponseLabel = document.querySelector("#mcp-response-label");
 const currentProvider = document.querySelector("#current-provider");
 const decisionTimeline = document.querySelector("#decision-timeline");
 const inspectionProject = document.querySelector("#inspection-project");
@@ -297,15 +298,36 @@ function renderExecutionTrace(trace) {
 function renderMcpInspector(trace) {
   const request = trace?.mcp_request;
   const response = trace?.mcp_response;
-  mcpRequestOutput.textContent = request
-    ? JSON.stringify(request, null, 2)
-    : "安全路由未产生 MCP tools/call。";
-  mcpResponseOutput.textContent = response
-    ? JSON.stringify(response, null, 2)
-    : "MCP Provider 未返回结果。";
-  mcpCallState.textContent = request
-    ? response ? "TOOLS/CALL COMPLETE" : "TOOLS/CALL FAILED"
-    : "SKIPPED";
+  const provider = trace?.provider || "unconfigured";
+  const authorized = trace?.safety_gate?.authorized === true;
+
+  if (provider === "direct-mock") {
+    mcpResponseLabel.textContent = "RESULT · Direct Mock";
+    mcpRequestOutput.textContent = authorized
+      ? "当前为 Direct Mock 模式，不经过 MCP tools/call；请求已直接交给模拟 CAD Provider。"
+      : "Safety Gate 未授权，未产生 CAD 或 MCP 调用。";
+    mcpResponseOutput.textContent = authorized
+      ? "无 MCP 响应；Direct Mock 已返回模拟执行结果。"
+      : "未调用模拟 CAD Provider。";
+    mcpCallState.textContent = authorized ? "DIRECT MOCK COMPLETE" : "SKIPPED";
+    return;
+  }
+
+  mcpResponseLabel.textContent = "RESPONSE · Contract Mock";
+  if (request) {
+    mcpRequestOutput.textContent = JSON.stringify(request, null, 2);
+    mcpResponseOutput.textContent = response
+      ? JSON.stringify(response, null, 2)
+      : "MCP Provider 未返回可确认结果，请勿自动重试创建。";
+    mcpCallState.textContent = response ? "TOOLS/CALL COMPLETE" : "TOOLS/CALL FAILED";
+    return;
+  }
+
+  mcpRequestOutput.textContent = authorized
+    ? "MCP tools/call 在发送前被配置或契约校验阻止。"
+    : "Safety Gate 未授权，未产生 MCP tools/call。";
+  mcpResponseOutput.textContent = "未调用 MCP Provider。";
+  mcpCallState.textContent = "SKIPPED";
 }
 
 function renderProviderBoundary(trace) {
@@ -325,6 +347,7 @@ function clearExecutionTrace() {
   });
   traceTotal.textContent = "TOTAL —";
   mcpCallState.textContent = "WAITING";
+  mcpResponseLabel.textContent = "RESPONSE · CAD Provider";
   mcpRequestOutput.textContent = "等待通过安全校验的请求…";
   mcpResponseOutput.textContent = "尚未调用 MCP Provider。";
   renderDecisionLoop(null);
