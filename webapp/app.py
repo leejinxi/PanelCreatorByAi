@@ -77,29 +77,33 @@ def create_app(
 
         try:
             state = agent_runner(request.message)
+            return map_agent_state(
+                state,
+                request_id=request_id,
+                mode=mode,
+            )
         except Exception:
             logger.exception(
                 "Unexpected web agent failure for request %s",
                 request_id,
             )
-            response = map_agent_state(
-                {
-                    "error": "Agent 服务发生未预期异常。",
-                    "error_code": "AGENT_INTERNAL_ERROR",
-                },
-                request_id=request_id,
-                mode=mode,
-            )
             return JSONResponse(
                 status_code=500,
-                content=response.model_dump(mode="json", by_alias=True),
+                content={
+                    "request_id": request_id,
+                    "status": "error",
+                    "mode": mode,
+                    "message": "Agent 服务发生未预期异常。",
+                    "steps": [
+                        {"name": "parse", "status": "error"},
+                        {"name": "validate", "status": "skipped"},
+                        {"name": "cad", "status": "skipped"},
+                    ],
+                    "panel": None,
+                    "cad_result": None,
+                    "error_code": "AGENT_INTERNAL_ERROR",
+                },
             )
-
-        return map_agent_state(
-            state,
-            request_id=request_id,
-            mode=mode,
-        )
 
     return application
 

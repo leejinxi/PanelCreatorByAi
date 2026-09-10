@@ -37,6 +37,14 @@ python run_tests.py
 
 启用本地 MCP Contract Mock：
 
+推荐使用一键演示脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_mcp_demo.ps1
+```
+
+也可以手动设置环境变量：
+
 ```powershell
 $env:CAD_BACKEND = "mcp"
 $env:MCP_CONTRACT_PATH = "contracts/FULL_contract_with_data.json"

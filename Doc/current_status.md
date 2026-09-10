@@ -48,6 +48,8 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 - `McpCadBackend` 已通过 `CAD_BACKEND=mcp` 接入运行时选择，Graph 仍只依赖稳定的 CAD Tool 契约。
 - Web 健康状态已区分 `mock` 与 `mcp-contract-mock`，未知配置返回 503。
 - 已完成“真实 Ollama -> LangGraph -> MCP STDIO Mock -> Web 页面”的成功与澄清场景人工验收。
+- 已增加 scripts/start_mcp_demo.ps1 一键启动入口和固定演示操作手册。
+- 新 PC 已再次验证成功请求、缺材料澄清和补充材料后成功创建。
 - 本地契约完全由个人 PC 自行拟定，不代表公司原生 CAD API。
 - 公司端目前只有原生 CAD API，没有 MCP Server；真实接入仍需要公司侧 CAD Adapter/MCP Server。
 - 直接 Mock 失败注入尚未实现；MCP Contract Mock 的定位面失败和 CAD 不可用场景已覆盖。

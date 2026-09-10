@@ -148,6 +148,18 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(self.received_messages, [])
 
+    async def test_response_mapping_failure_returns_safe_json(self) -> None:
+        with patch("webapp.app.map_agent_state", side_effect=RuntimeError("private mapping detail")):
+            response = await self.client.post(
+                "/api/agent/runs",
+                json={"message": "创建板架"},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.headers["content-type"], "application/json")
+        self.assertEqual(response.json()["error_code"], "AGENT_INTERNAL_ERROR")
+        self.assertNotIn("private mapping detail", response.text)
+
     async def test_unexpected_runner_failure_returns_safe_error(self) -> None:
         def failing_runner(message: str) -> dict:
             raise RuntimeError("secret backend detail")

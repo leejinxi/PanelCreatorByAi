@@ -6,6 +6,7 @@ const submitButton = document.querySelector("#submit-button");
 const submitLabel = submitButton.querySelector(".button-label");
 const resetButton = document.querySelector("#reset-button");
 const newSessionButton = document.querySelector("#new-session-button");
+const exampleButtons = [...document.querySelectorAll("[data-example]")];
 const sessionNote = document.querySelector("#session-note");
 const inputError = document.querySelector("#input-error");
 const characterCount = document.querySelector("#character-count");
@@ -39,6 +40,9 @@ let userTurns = [];
 let awaitingClarification = false;
 let loadingTimer = null;
 let isExecuting = false;
+let executionMode = "unconfigured";
+
+const DEMO_REQUEST_TIMEOUT_MS = 150000;
 
 const stepOrder = ["parse", "validate", "cad"];
 const resultPresentation = {
@@ -67,6 +71,8 @@ function buildAccumulatedRequest(turns) {
 function setLoading(isLoading) {
   submitButton.disabled = isLoading;
   resetButton.disabled = isLoading;
+  newSessionButton.disabled = isLoading;
+  exampleButtons.forEach((button) => { button.disabled = isLoading; });
   input.disabled = isLoading;
   submitLabel.textContent = isLoading
     ? "Agent 正在执行"
@@ -86,6 +92,15 @@ function setLoading(isLoading) {
     activeIndex = Math.min(activeIndex + 1, stepOrder.length - 1);
     renderLoadingStep(activeIndex);
   }, 900);
+}
+
+function clearPreviousResultForExecution() {
+  requestId.textContent = "REQUEST —";
+  parameterState.textContent = "等待解析";
+  renderPanel(null);
+  jsonDetails.hidden = true;
+  jsonDetails.open = false;
+  jsonOutput.textContent = "";
 }
 
 function renderLoadingStep(activeIndex) {
@@ -185,6 +200,7 @@ function renderNetworkError(message) {
 }
 
 function renderExecutionMode(mode) {
+  executionMode = mode;
   const label = { mock: "Direct Mock CAD", mcp: "MCP Contract Mock" }[mode];
   cadStatus.classList.remove("online", "offline");
   cadStatus.lastChild.textContent = label || "后端配置未确认";
@@ -192,6 +208,12 @@ function renderExecutionMode(mode) {
     ? `${label} · CAD execution is simulated`
     : "后端配置未确认";
   document.querySelector("#backend-step-label").textContent = label || "等待确认后端";
+}
+
+function simulatedBackendNote() {
+  return executionMode === "mcp"
+    ? "MCP Contract Mock 不会修改真实工程。"
+    : "Direct Mock CAD 不会修改真实工程。";
 }
 
 async function checkHealth() {
@@ -222,18 +244,32 @@ async function executeAgentTurn(turn, { startNewSession = false } = {}) {
   }
 
   setLoading(true);
+  clearPreviousResultForExecution();
   resultElements.container.className = "execution-result neutral";
   resultElements.kicker.textContent = "正在执行";
   resultElements.message.textContent = "Agent 正在理解需求并整理 CAD 参数…";
   resultElements.meta.textContent = "请稍候，不要重复提交。";
 
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), DEMO_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch("/api/agent/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ message: buildAccumulatedRequest(userTurns) }),
+      signal: controller.signal,
     });
-    const payload = await response.json();
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(`服务返回了非 JSON 响应（HTTP ${response.status}）。请查看启动窗口中的错误日志。`);
+    }
+
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(`服务返回了无效 JSON（HTTP ${response.status}）。请查看启动窗口中的错误日志。`);
+    }
 
     if (!response.ok && !payload.status) {
       const detail = Array.isArray(payload.detail) ? payload.detail[0]?.msg : null;
@@ -247,9 +283,13 @@ async function executeAgentTurn(turn, { startNewSession = false } = {}) {
     return payload;
   } catch (error) {
     userTurns = previousTurns;
-    renderNetworkError(error instanceof Error ? error.message : "无法连接本地 Agent 服务。");
+    const message = error?.name === "AbortError"
+      ? "页面已停止等待。服务端任务可能仍在执行，请确认结果后再重新提交。"
+      : error instanceof Error ? error.message : "无法连接本地 Agent 服务。";
+    renderNetworkError(message);
     throw error;
   } finally {
+    window.clearTimeout(timeoutId);
     isExecuting = false;
     setLoading(false);
   }
@@ -274,6 +314,7 @@ async function submitRequest(event) {
 }
 
 function resetSession() {
+  if (isExecuting) return;
   userTurns = [];
   awaitingClarification = false;
   input.value = "";
@@ -378,7 +419,7 @@ function registerWebMcpTool() {
   );
 }
 
-document.querySelectorAll("[data-example]").forEach((button) => {
+exampleButtons.forEach((button) => {
   button.addEventListener("click", () => {
     resetSession();
     input.value = button.dataset.example;
