@@ -50,6 +50,8 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 - 已完成“真实 Ollama -> LangGraph -> MCP STDIO Mock -> Web 页面”的成功与澄清场景人工验收。
 - 已增加 scripts/start_mcp_demo.ps1 一键启动入口和固定演示操作手册。
 - 新 PC 已再次验证成功请求、缺材料澄清和补充材料后成功创建。
+- 透明执行台已实现五节点 Trace、MCP 调用检查器和 Provider 替换图；页面采用简约白蓝主题，已移除板架示意区域并修复标题换行。
+- 成功与澄清场景已使用真实 Qwen 验证，1366×768 和 1920×1080 页面无横向溢出。
 - 本地契约完全由个人 PC 自行拟定，不代表公司原生 CAD API。
 - 公司端目前只有原生 CAD API，没有 MCP Server；真实接入仍需要公司侧 CAD Adapter/MCP Server。
 - 直接 Mock 失败注入尚未实现；MCP Contract Mock 的定位面失败和 CAD 不可用场景已覆盖。
@@ -69,7 +71,7 @@ Agent 不查询定位面目录，也不判断定位面是否真实存在。未�
 python -X utf8 run_tests.py
 ```
 
-结果：115 项运行，114 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。
+结果：118 项运行，117 项通过，1 项真实 Ollama E2E 默认跳过。MCP 专项测试会启动真实 STDIO 子进程，但不会访问真实 CAD。
 
 真实网页验收：`CAD_BACKEND=mcp` 下，真实 Qwen 成功解析“第100肋位、14mm、AH36”并经 MCP Contract Mock 返回模拟对象；缺少材料时页面进入澄清且跳过 CAD。
 

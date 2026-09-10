@@ -1,10 +1,70 @@
 import unittest
 
+from pydantic import ValidationError
+
 from schemas.panel_schema import CadExecutionResult, PanelRequest
 from webapp.response_mapper import map_agent_state
+from webapp.schemas import ExecutionTraceView
 
 
 class WebResponseMapperTests(unittest.TestCase):
+    def test_trace_schema_rejects_unknown_fields(self) -> None:
+        with self.assertRaises(ValidationError):
+            ExecutionTraceView.model_validate({
+                "nodes": [],
+                "provider": "contract-mock",
+                "simulated": True,
+                "private_path": "D:/private",
+            })
+
+    def test_trace_exposes_only_whitelisted_mcp_fields(self) -> None:
+        response = map_agent_state(
+            {
+                "llm_raw_output": "private prompt output",
+                "panel_request": PanelRequest(
+                    reference_plane="FR100",
+                    thickness=14,
+                    material="AH36",
+                ),
+                "cad_result": CadExecutionResult(
+                    success=True,
+                    message="created",
+                    object_id="mock-001",
+                ),
+            },
+            request_id="TRACE-001",
+            mode="mcp",
+            trace={
+                "total_ms": 50,
+                "mcp_duration_ms": 10,
+                "mcp_request": {
+                    "transport": "stdio",
+                    "method": "tools/call",
+                    "tool": "create_panel",
+                    "contract_version": "0.1-poc",
+                    "arguments": {
+                        "referenceName": "FR100",
+                        "thicknessMm": 14,
+                        "material": "AH36",
+                        "boundaries": {},
+                    },
+                },
+                "mcp_response": {
+                    "success": True,
+                    "object_id": "mock-001",
+                    "error_code": None,
+                },
+            },
+        )
+        payload = response.model_dump(mode="json", by_alias=True)
+        serialized = str(payload)
+        self.assertNotIn("private prompt output", serialized)
+        self.assertNotIn("D:/private", serialized)
+        self.assertEqual(
+            payload["execution_trace"]["mcp_request"]["arguments"]["referenceName"],
+            "FR100",
+        )
+
     def test_mcp_failure_keeps_business_error_and_mode(self) -> None:
         result = map_agent_state(
             {"cad_result": CadExecutionResult(

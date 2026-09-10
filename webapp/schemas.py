@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -54,6 +54,58 @@ class AgentStepView(BaseModel):
 
     name: StepName
     status: StepStatus
+
+
+TraceNodeName = Literal["llm", "graph", "schema", "mcp", "provider"]
+TraceProvider = Literal["direct-mock", "contract-mock", "unconfigured"]
+
+
+class TraceNodeView(BaseModel):
+    """透明执行台中的最终节点状态。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: TraceNodeName
+    label: str
+    status: StepStatus
+    duration_ms: int | None = Field(default=None, ge=0)
+    summary: str
+    details: dict[str, Any] | None = None
+
+
+class McpCallView(BaseModel):
+    """实际发送到 MCP 边界的安全调用摘要。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transport: Literal["stdio"]
+    method: Literal["tools/call"]
+    tool: Literal["create_panel"]
+    contract_version: str
+    arguments: dict[str, Any]
+
+
+class McpResponseView(BaseModel):
+    """MCP 返回的白名单结果摘要。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool
+    object_id: str | None = None
+    error_code: str | None = None
+
+
+class ExecutionTraceView(BaseModel):
+    """页面透明执行台使用的请求级 Trace。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nodes: list[TraceNodeView]
+    mcp_request: McpCallView | None = None
+    mcp_response: McpResponseView | None = None
+    provider: TraceProvider
+    simulated: Literal[True] = True
+    total_ms: int | None = Field(default=None, ge=0)
 
 
 class BoundaryView(BaseModel):
@@ -113,6 +165,7 @@ class AgentRunResponse(BaseModel):
     panel: PanelView | None = None
     cad_result: CadResultView | None = None
     error_code: str | None = None
+    execution_trace: ExecutionTraceView | None = None
 
     @model_validator(mode="after")
     def validate_result_consistency(self) -> "AgentRunResponse":

@@ -1,7 +1,10 @@
+from time import perf_counter
 from typing import List, Optional
 
 import requests
 from langchain_core.language_models.llms import LLM
+
+from agent.execution_trace import record_llm
 
 
 class LocalQwenError(RuntimeError):
@@ -53,6 +56,7 @@ class LocalQwen(LLM):
             },
         }
 
+        started = perf_counter()
         try:
             response = requests.post(
                 self.url,
@@ -88,6 +92,8 @@ class LocalQwen(LLM):
                 "本地模型请求失败。",
                 error_code="LLM_REQUEST_ERROR",
             ) from exc
+        finally:
+            record_llm(round((perf_counter() - started) * 1000))
 
         try:
             content = response.json()["message"]["content"]

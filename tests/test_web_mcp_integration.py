@@ -75,6 +75,25 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("模拟", result["message"])
         self.assertIn("模拟", result["cad_result"]["message"])
         self.assertEqual([s["status"] for s in result["steps"]], ["success"] * 3)
+        trace = result["execution_trace"]
+        self.assertEqual(
+            [node["name"] for node in trace["nodes"]],
+            ["llm", "graph", "schema", "mcp", "provider"],
+        )
+        self.assertEqual(trace["provider"], "contract-mock")
+        self.assertTrue(trace["simulated"])
+        self.assertEqual(trace["mcp_request"]["tool"], "create_panel")
+        self.assertEqual(
+            trace["mcp_request"]["arguments"]["referenceName"],
+            "FR100",
+        )
+        self.assertEqual(
+            trace["mcp_response"]["object_id"],
+            "mock-mcp-panel-001",
+        )
+        mcp_node = next(node for node in trace["nodes"] if node["name"] == "mcp")
+        self.assertEqual(mcp_node["status"], "success")
+        self.assertIsNotNone(mcp_node["duration_ms"])
 
     async def test_real_stdio_reference_not_found(self) -> None:
         result = await self.run_output(model_output(reference_plane="MISSING"))
@@ -94,6 +113,17 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result["status"], "clarification")
                 self.assertIsNone(result["cad_result"])
                 self.assertEqual(result["steps"][-1]["status"], "skipped")
+                trace = result["execution_trace"]
+                self.assertIsNone(trace["mcp_request"])
+                self.assertIsNone(trace["mcp_response"])
+                self.assertEqual(
+                    next(
+                        node["status"]
+                        for node in trace["nodes"]
+                        if node["name"] == "mcp"
+                    ),
+                    "skipped",
+                )
 
     async def test_unsupported_stops_before_backend(self) -> None:
         with patch("tools.cad_tools.build_cad_backend") as build:

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Ship CAD Copilot 本地板架创建工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=light-blue-v2">
+  <script src="/static/app.js?v=light-blue-v2" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -108,6 +108,33 @@
           </li>
         </ol>
 
+        <section class="trace-console" aria-labelledby="trace-heading">
+          <div class="trace-heading">
+            <div>
+              <span class="eyebrow">LIVE EXECUTION TRACE</span>
+              <h3 id="trace-heading">真实组件执行路径</h3>
+            </div>
+            <span id="trace-total">TOTAL —</span>
+          </div>
+          <ol class="trace-pipeline" id="trace-pipeline">
+            <li class="trace-node" data-trace="llm">
+              <span>01</span><strong>Local Qwen</strong><small>等待请求</small>
+            </li>
+            <li class="trace-node" data-trace="graph">
+              <span>02</span><strong>LangGraph</strong><small>等待路由</small>
+            </li>
+            <li class="trace-node" data-trace="schema">
+              <span>03</span><strong>Pydantic Schema</strong><small>等待校验</small>
+            </li>
+            <li class="trace-node" data-trace="mcp">
+              <span>04</span><strong>MCP STDIO</strong><small>等待调用</small>
+            </li>
+            <li class="trace-node" data-trace="provider">
+              <span>05</span><strong>CAD Provider</strong><small>等待执行</small>
+            </li>
+          </ol>
+        </section>
+
         <div class="result-grid">
           <section class="parameter-card" aria-labelledby="parameter-heading">
             <div class="card-heading">
@@ -141,35 +168,41 @@
               <div><dt>RIGHT</dt><dd id="boundary-right">未指定</dd></div>
             </dl>
           </section>
-
-          <section class="cad-card" aria-labelledby="cad-preview-heading">
-            <div class="card-heading">
-              <h3 id="cad-preview-heading">板架示意</h3>
-              <span>XZ VIEW</span>
-            </div>
-            <div class="cad-stage">
-              <svg viewBox="0 0 420 250" role="img" aria-label="板架边界与定位面示意图">
-                <defs>
-                  <pattern id="minor-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.18"/>
-                  </pattern>
-                </defs>
-                <rect width="420" height="250" fill="url(#minor-grid)"/>
-                <line class="axis-line" x1="34" y1="218" x2="394" y2="218"/>
-                <line class="axis-line" x1="34" y1="218" x2="34" y2="24"/>
-                <text class="axis-label" x="398" y="222">Y</text>
-                <text class="axis-label" x="28" y="18">Z</text>
-                <rect class="panel-shape" x="105" y="55" width="225" height="125" rx="2"/>
-                <line class="center-line" x1="217.5" y1="38" x2="217.5" y2="198"/>
-                <line class="dimension-line" x1="105" y1="194" x2="330" y2="194"/>
-                <path class="dimension-tick" d="M105 188v12M330 188v12"/>
-                <text class="diagram-label" x="217" y="124" text-anchor="middle">PANEL</text>
-                <text class="diagram-meta" id="diagram-reference" x="217" y="143" text-anchor="middle">REFERENCE —</text>
-              </svg>
-              <span class="cad-coordinate">LOCAL COORDINATE</span>
-            </div>
-          </section>
         </div>
+
+        <section class="mcp-inspector" aria-labelledby="mcp-inspector-heading">
+          <div class="trace-heading">
+            <div>
+              <span class="eyebrow">MCP CALL INSPECTOR</span>
+              <h3 id="mcp-inspector-heading">实际工具调用</h3>
+            </div>
+            <span id="mcp-call-state">WAITING</span>
+          </div>
+          <div class="inspector-grid">
+            <div>
+              <span>REQUEST · tools/call</span>
+              <pre id="mcp-request-output">等待通过安全校验的请求…</pre>
+            </div>
+            <div>
+              <span>RESPONSE · Contract Mock</span>
+              <pre id="mcp-response-output">尚未调用 MCP Provider。</pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="provider-boundary" aria-labelledby="provider-heading">
+          <div>
+            <span class="eyebrow">PROVIDER REPLACEMENT BOUNDARY</span>
+            <h3 id="provider-heading">从本地 PoC 迁移到公司 CAD</h3>
+          </div>
+          <div class="provider-flow">
+            <div class="provider-box stable">Web · Qwen · LangGraph · Schema · MCP Client<small>保持不变</small></div>
+            <span>→</span>
+            <div class="provider-box current" id="current-provider">Contract Mock<small>当前模拟执行</small></div>
+            <span>⇢</span>
+            <div class="provider-box future">Company CAD Adapter → Native CAD API<small>内网替换目标</small></div>
+          </div>
+        </section>
 
         <section class="execution-result neutral" id="execution-result" aria-live="polite">
           <div class="result-icon" id="result-icon" aria-hidden="true">·</div>

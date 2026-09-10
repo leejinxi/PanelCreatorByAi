@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agent.main import run_panel_agent
 from tools.cad_tools import get_cad_backend_name
+from agent.execution_trace import begin_trace, end_trace, snapshot_trace
 from webapp.response_mapper import map_agent_state
 from webapp.schemas import (
     AgentRunRequest,
@@ -75,12 +77,22 @@ def create_app(
         request_id = uuid4().hex
         mode = execution_mode()
 
+        provider = {
+            "mock": "direct-mock",
+            "mcp": "contract-mock",
+            "unconfigured": "unconfigured",
+        }[mode]
+        token = begin_trace(provider)
+        started = perf_counter()
         try:
             state = agent_runner(request.message)
+            trace = snapshot_trace()
+            trace["total_ms"] = round((perf_counter() - started) * 1000)
             return map_agent_state(
                 state,
                 request_id=request_id,
                 mode=mode,
+                trace=trace,
             )
         except Exception:
             logger.exception(
@@ -102,8 +114,47 @@ def create_app(
                     "panel": None,
                     "cad_result": None,
                     "error_code": "AGENT_INTERNAL_ERROR",
+                    "execution_trace": {
+                        "nodes": [
+                            {
+                                "name": "llm",
+                                "label": "Local Qwen",
+                                "status": "error",
+                                "summary": "请求发生未预期异常",
+                            },
+                            {
+                                "name": "graph",
+                                "label": "LangGraph",
+                                "status": "error",
+                                "summary": "流程已安全停止",
+                            },
+                            {
+                                "name": "schema",
+                                "label": "Pydantic Schema",
+                                "status": "skipped",
+                                "summary": "未完成校验",
+                            },
+                            {
+                                "name": "mcp",
+                                "label": "MCP STDIO",
+                                "status": "skipped",
+                                "summary": "未确认 MCP 调用",
+                            },
+                            {
+                                "name": "provider",
+                                "label": "CAD Provider",
+                                "status": "skipped",
+                                "summary": "未执行 Provider",
+                            },
+                        ],
+                        "provider": provider,
+                        "simulated": True,
+                        "total_ms": round((perf_counter() - started) * 1000),
+                    },
                 },
             )
+        finally:
+            end_trace(token)
 
     return application
 

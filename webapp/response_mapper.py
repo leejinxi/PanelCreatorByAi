@@ -11,7 +11,11 @@ from webapp.schemas import (
     BoundaryView,
     CadResultView,
     ExecutionMode,
+    ExecutionTraceView,
+    McpCallView,
+    McpResponseView,
     PanelView,
+    TraceNodeView,
 )
 
 
@@ -20,6 +24,7 @@ def map_agent_state(
     *,
     request_id: str,
     mode: ExecutionMode = "mock",
+    trace: Mapping[str, Any] | None = None,
 ) -> AgentRunResponse:
     """把内部 AgentState 映射为稳定、可公开给页面的响应。"""
 
@@ -41,6 +46,13 @@ def map_agent_state(
         panel=panel,
         cad_result=cad_result,
         error_code=error_code,
+        execution_trace=_build_execution_trace(
+            state,
+            status=status,
+            cad_result=cad_result,
+            mode=mode,
+            trace=trace or {},
+        ),
     )
 
 
@@ -181,3 +193,154 @@ def _optional_text(value: Any) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+def _build_execution_trace(
+    state: Mapping[str, Any],
+    *,
+    status: AgentRunStatus,
+    cad_result: CadResultView | None,
+    mode: ExecutionMode,
+    trace: Mapping[str, Any],
+) -> ExecutionTraceView:
+    """根据实际状态和传输层摘要生成页面 Trace。"""
+
+    error_code = _optional_text(state.get("error_code"))
+    has_parsed = any(
+        state.get(key) is not None
+        for key in ("llm_raw_output", "action_plan", "structure_json", "panel_request")
+    )
+    llm_status = "error" if error_code and error_code.startswith("LLM_") else (
+        "success" if has_parsed or status == "unsupported" else "error"
+    )
+
+    if status == "clarification":
+        schema_status = "attention"
+        schema_summary = "必填参数不完整，已停止 CAD 调用"
+    elif status == "unsupported":
+        schema_status = "skipped"
+        schema_summary = "当前意图不属于 create_panel"
+    elif state.get("panel_request") is not None:
+        schema_status = "success"
+        schema_summary = "PanelRequest 强类型校验通过"
+    elif llm_status == "error":
+        schema_status = "skipped"
+        schema_summary = "模型阶段失败，未进入参数校验"
+    else:
+        schema_status = "error"
+        schema_summary = "参数未通过 PanelRequest 校验"
+
+    mcp_request_data = trace.get("mcp_request")
+    mcp_response_data = trace.get("mcp_response")
+    mcp_request = (
+        McpCallView.model_validate(mcp_request_data)
+        if isinstance(mcp_request_data, Mapping)
+        else None
+    )
+    mcp_response = None
+    if isinstance(mcp_response_data, Mapping) and isinstance(
+        mcp_response_data.get("success"), bool
+    ):
+        mcp_response = McpResponseView.model_validate(mcp_response_data)
+
+    if mode != "mcp":
+        mcp_status = "skipped"
+        mcp_summary = "当前使用 Direct Mock，未经过 MCP"
+    elif mcp_request is None:
+        mcp_status = "skipped"
+        mcp_summary = "安全路由已阻止 MCP 调用"
+    elif cad_result is not None and cad_result.success:
+        mcp_status = "success"
+        mcp_summary = "tools/call 已通过 STDIO 完成"
+    else:
+        mcp_status = "error"
+        mcp_summary = "MCP 已调用并返回失败"
+
+    if mode == "mcp":
+        provider = "contract-mock"
+        provider_label = "Contract Mock"
+    elif mode == "mock":
+        provider = "direct-mock"
+        provider_label = "Direct Mock"
+    else:
+        provider = "unconfigured"
+        provider_label = "未配置 Provider"
+
+    if cad_result is not None:
+        provider_status = "success" if cad_result.success else "error"
+        provider_summary = (
+            "返回模拟对象 ID，未修改真实 CAD"
+            if cad_result.success
+            else f"模拟执行失败：{cad_result.error_code or 'UNKNOWN'}"
+        )
+    else:
+        provider_status = "skipped"
+        provider_summary = "未执行 CAD Provider"
+
+    graph_status = "error" if status == "error" and llm_status == "error" else (
+        "attention" if status == "clarification" else "success"
+    )
+    graph_summary = {
+        "success": "路由：parse -> validate -> cad",
+        "clarification": "路由：parse -> validate -> END",
+        "unsupported": "路由：parse -> validate -> END",
+        "error": (
+            "路由在模型阶段受控停止"
+            if llm_status == "error"
+            else "路由在执行阶段受控停止"
+        ),
+    }[status]
+
+    nodes = [
+        TraceNodeView(
+            name="llm",
+            label="Local Qwen",
+            status=llm_status,
+            duration_ms=_optional_duration(trace.get("llm_duration_ms")),
+            summary="本地模型已生成结构化候选参数"
+            if llm_status == "success"
+            else "本地模型未返回可用参数",
+            details={"model": "qwen2.5:7b", "data": "candidate parameters only"},
+        ),
+        TraceNodeView(
+            name="graph",
+            label="LangGraph",
+            status=graph_status,
+            summary=graph_summary,
+            details={"policy": "validated requests only"},
+        ),
+        TraceNodeView(
+            name="schema",
+            label="Pydantic Schema",
+            status=schema_status,
+            summary=schema_summary,
+            details={"schema": "PanelRequest", "extra": "forbid"},
+        ),
+        TraceNodeView(
+            name="mcp",
+            label="MCP STDIO",
+            status=mcp_status,
+            duration_ms=_optional_duration(trace.get("mcp_duration_ms")),
+            summary=mcp_summary,
+            details={"transport": "stdio", "tool": "create_panel"},
+        ),
+        TraceNodeView(
+            name="provider",
+            label=provider_label,
+            status=provider_status,
+            summary=provider_summary,
+            details={"simulated": True},
+        ),
+    ]
+    return ExecutionTraceView(
+        nodes=nodes,
+        mcp_request=mcp_request,
+        mcp_response=mcp_response,
+        provider=provider,
+        total_ms=_optional_duration(trace.get("total_ms")),
+    )
+
+
+def _optional_duration(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return max(0, round(value))

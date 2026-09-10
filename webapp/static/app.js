@@ -16,6 +16,17 @@ const cadStatus = document.querySelector("#cad-status");
 const parameterState = document.querySelector("#parameter-state");
 const jsonDetails = document.querySelector("#json-details");
 const jsonOutput = document.querySelector("#json-output");
+const traceTotal = document.querySelector("#trace-total");
+const mcpCallState = document.querySelector("#mcp-call-state");
+const mcpRequestOutput = document.querySelector("#mcp-request-output");
+const mcpResponseOutput = document.querySelector("#mcp-response-output");
+const currentProvider = document.querySelector("#current-provider");
+const traceElements = new Map(
+  [...document.querySelectorAll("[data-trace]")].map((element) => [
+    element.dataset.trace,
+    element,
+  ]),
+);
 
 const parameterFields = {
   referenceName: document.querySelector("#reference-name"),
@@ -25,7 +36,6 @@ const parameterFields = {
   bottom: document.querySelector("#boundary-bottom"),
   left: document.querySelector("#boundary-left"),
   right: document.querySelector("#boundary-right"),
-  diagramReference: document.querySelector("#diagram-reference"),
 };
 
 const resultElements = {
@@ -101,6 +111,12 @@ function clearPreviousResultForExecution() {
   jsonDetails.hidden = true;
   jsonDetails.open = false;
   jsonOutput.textContent = "";
+  clearExecutionTrace();
+  const llmNode = traceElements.get("llm");
+  if (llmNode) {
+    llmNode.classList.add("running");
+    llmNode.querySelector("small").textContent = "正在调用本地模型…";
+  }
 }
 
 function renderLoadingStep(activeIndex) {
@@ -145,12 +161,65 @@ function renderPanel(panel) {
   parameterFields.bottom.textContent = displayValue(boundaries.bottom, "未指定");
   parameterFields.left.textContent = displayValue(boundaries.left, "未指定");
   parameterFields.right.textContent = displayValue(boundaries.right, "未指定");
-  parameterFields.diagramReference.textContent = `REFERENCE ${referenceName}`;
   parameterState.textContent = panel ? "已提取" : "等待解析";
+}
+
+function renderExecutionTrace(trace) {
+  const nodes = new Map((trace?.nodes || []).map((node) => [node.name, node]));
+  traceElements.forEach((element, name) => {
+    const node = nodes.get(name);
+    element.className = "trace-node";
+    if (!node) return;
+    element.classList.add(node.status);
+    element.querySelector("strong").textContent = node.label;
+    const duration = node.duration_ms === null || node.duration_ms === undefined
+      ? "" : ` · ${node.duration_ms}ms`;
+    element.querySelector("small").textContent = `${node.summary}${duration}`;
+  });
+  traceTotal.textContent = trace?.total_ms === null || trace?.total_ms === undefined
+    ? "TOTAL —" : `TOTAL ${trace.total_ms}ms`;
+}
+
+function renderMcpInspector(trace) {
+  const request = trace?.mcp_request;
+  const response = trace?.mcp_response;
+  mcpRequestOutput.textContent = request
+    ? JSON.stringify(request, null, 2)
+    : "安全路由未产生 MCP tools/call。";
+  mcpResponseOutput.textContent = response
+    ? JSON.stringify(response, null, 2)
+    : "MCP Provider 未返回结果。";
+  mcpCallState.textContent = request
+    ? response ? "TOOLS/CALL COMPLETE" : "TOOLS/CALL FAILED"
+    : "SKIPPED";
+}
+
+function renderProviderBoundary(trace) {
+  const provider = trace?.provider || "unconfigured";
+  currentProvider.innerHTML = provider === "contract-mock"
+    ? "Contract Mock<small>当前模拟执行</small>"
+    : provider === "direct-mock"
+      ? "Direct Mock<small>当前模拟执行</small>"
+      : "Unconfigured<small>等待后端配置</small>";
+}
+
+
+function clearExecutionTrace() {
+  traceElements.forEach((element) => {
+    element.className = "trace-node";
+    element.querySelector("small").textContent = "等待请求";
+  });
+  traceTotal.textContent = "TOTAL —";
+  mcpCallState.textContent = "WAITING";
+  mcpRequestOutput.textContent = "等待通过安全校验的请求…";
+  mcpResponseOutput.textContent = "尚未调用 MCP Provider。";
 }
 
 function renderResult(payload) {
   renderExecutionMode(payload.mode);
+  renderExecutionTrace(payload.execution_trace);
+  renderMcpInspector(payload.execution_trace);
+  renderProviderBoundary(payload.execution_trace);
   const presentation = resultPresentation[payload.status] ?? resultPresentation.error;
   resultElements.container.className = `execution-result ${presentation.className}`;
   resultElements.icon.textContent = presentation.icon;
@@ -203,6 +272,7 @@ function renderExecutionMode(mode) {
   executionMode = mode;
   const label = { mock: "Direct Mock CAD", mcp: "MCP Contract Mock" }[mode];
   cadStatus.classList.remove("online", "offline");
+  cadStatus.classList.add(label ? "online" : "offline");
   cadStatus.lastChild.textContent = label || "后端配置未确认";
   document.querySelector("#execution-mode").textContent = label
     ? `${label} · CAD execution is simulated`
@@ -328,11 +398,12 @@ function resetSession() {
   jsonDetails.hidden = true;
   renderPanel(null);
   renderSteps([]);
+  clearExecutionTrace();
   resultElements.container.className = "execution-result neutral";
   resultElements.icon.textContent = "·";
   resultElements.kicker.textContent = "等待任务";
   resultElements.message.textContent = "输入板架需求后，执行结果将在这里显示。";
-  resultElements.meta.textContent = "Mock CAD 不会修改真实工程。";
+  resultElements.meta.textContent = simulatedBackendNote();
   setCharacterCount();
   input.focus();
 }

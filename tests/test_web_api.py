@@ -64,6 +64,10 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("AI Ship CAD Copilot", response.text)
         self.assertIn('id="request-form"', response.text)
+        self.assertIn('id="trace-pipeline"', response.text)
+        self.assertIn('id="mcp-request-output"', response.text)
+        self.assertIn('id="current-provider"', response.text)
+        self.assertNotIn('id="cad-preview-heading"', response.text)
         self.assertIn("DEMO MODE", response.text)
 
     async def test_mcp_mode_matches_health_and_simulated_result(self) -> None:

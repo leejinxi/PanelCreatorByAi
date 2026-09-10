@@ -2,7 +2,7 @@
 
 版本：v1.0
 日期：2026-09-10
-状态：待实施
+状态：Step 1–3 已完成并验证
 目标：在没有真实 CAD 接口的条件下，把已经跑通的 Ollama、LangGraph、强类型 Schema、MCP STDIO 和 Contract Mock 链路转化为直观、可信、可录屏的展示成果。
 
 ---
@@ -524,7 +524,7 @@ PoC 最小实现建议使用请求级 Trace Collector：
 - 支持 execution_trace 的 Web API。
 - 透明执行链路页面。
 - MCP 请求/响应检查器。
-- 带 SIMULATED 水印的板架预览。
+- 按最终展示要求移除板架预览，改为整行参数展示；采用简约白蓝主题并修复标题换行。
 - Provider 替换边界图。
 - 一键启动脚本。
 - 固定演示操作手册。
@@ -534,3 +534,36 @@ PoC 最小实现建议使用请求级 Trace Collector：
 最终展示结论应表述为：
 
 > 当前 PoC 已在个人 PC 上真实跑通本地 Qwen、LangGraph、强类型校验和 MCP STDIO 调用。CAD 执行由 Contract Mock 模拟。进入公司内网后，需要新增原生 CAD API 到 MCP Tool 的 Adapter，上层 Agent 与 Web 展示链路可以保持不变。
+
+
+---
+
+# 12. 实施结果
+
+完成日期：2026-09-10
+
+已完成：
+
+- 请求级 ContextVar Trace，避免并发请求串数据。
+- Local Qwen 调用耗时、MCP 总耗时和 Web 总耗时采集。
+- 五节点透明执行路径：Local Qwen、LangGraph、Pydantic Schema、MCP STDIO、CAD Provider。
+- 实际 MCP tools/call 请求和白名单响应展示。
+- Provider 替换边界图。
+- 按最终展示要求移除板架预览，改为整行参数展示；采用简约白蓝主题并修复标题换行。
+- 缺参场景 MCP 与 Provider 明确显示 skipped。
+- 静态资源版本参数，避免浏览器继续使用旧 CSS/JavaScript。
+- 1366×768 与 1920×1080 浏览器检查。
+
+真实成功场景记录：
+
+- 输入：在第100肋位创建14mm厚AH36板架。
+- 结果：FR100、14mm、AH36，模拟对象 ID mock-mcp-panel-001。
+- Trace：Qwen、LangGraph、Schema、MCP、Contract Mock 全部成功。
+- MCP Inspector：transport=stdio、method=tools/call、tool=create_panel。
+- 页面持续标记 MCP Contract Mock，成功结果标明模拟创建和模拟对象 ID。
+
+真实澄清场景记录：
+
+- 输入：在第100肋位创建14mm厚板架。
+- 结果：提示补充材料。
+- Trace：Qwen 成功，LangGraph 和 Schema 为 attention，MCP 与 Provider 为 skipped。
