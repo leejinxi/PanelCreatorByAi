@@ -1,0 +1,54 @@
+{
+  "version": "demo-panel-review-1.0",
+  "data_source": "demo_rule",
+  "rules": [
+    {
+      "rule_id": "PANEL-DEMO-001",
+      "title": "请求参数完整性",
+      "severity": "info",
+      "description": "只有通过 PanelRequest 强类型校验的请求才能进入评审。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-002",
+      "title": "工程对象可执行性",
+      "severity": "blocker",
+      "description": "定位面和全部边界必须在 Mock 工程目录中唯一匹配、可用且角色合法。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-003",
+      "title": "定位面与边界对象重复",
+      "severity": "blocker",
+      "description": "Demo 安全规则禁止定位面与任一边界解析到同一个工程对象。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-004",
+      "title": "邻近板架厚度一致性",
+      "severity": "warning",
+      "description": "与显式邻近样本板厚不同时给出提醒，但不得修改用户参数。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-005",
+      "title": "邻近板架材料一致性",
+      "severity": "warning",
+      "description": "与显式邻近样本材料不同时给出提醒，但不得修改用户参数。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-006",
+      "title": "CCS 规范符合性",
+      "severity": "info",
+      "description": "当前 Demo 未接入 CCS 规范检索和适用性校核。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-007",
+      "title": "结构强度",
+      "severity": "info",
+      "description": "当前 Demo 未接入结构强度计算工具。"
+    },
+    {
+      "rule_id": "PANEL-DEMO-008",
+      "title": "真实 CAD 几何与碰撞",
+      "severity": "info",
+      "description": "当前 Demo 未连接真实 CAD，不能验证几何与碰撞。"
+    }
+  ]
+}

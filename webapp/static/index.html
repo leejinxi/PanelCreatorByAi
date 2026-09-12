@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Ship CAD Copilot 本地板架创建工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=agent-trace-v4">
-  <script src="/static/app.js?v=agent-trace-v4" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=design-review-v1">
+  <script src="/static/app.js?v=design-review-v1" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -60,6 +60,7 @@
             <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10 <LV5">智能创建</button>
             <button type="button" data-example="请在主甲板创建一块14mm厚的AH36板架，边界 >SL10">定位面歧义</button>
             <button type="button" data-example="请在FR999创建一块14mm厚的AH36板架，边界 >SL10">对象不存在</button>
+            <button type="button" data-example="请在FR100创建一块14mm厚的AH36板架，边界 >FR100">评审阻断</button>
             <button type="button" data-example="请解释AH36是什么材料">能力边界</button>
           </div>
 
@@ -107,16 +108,20 @@
             <span class="step-index">03</span>
             <span><strong>工程查询</strong><small>Mock context</small></span>
           </li>
-          <li class="step" data-step="evaluate">
+          <li class="step" data-step="review">
             <span class="step-index">04</span>
+            <span><strong>智能评审</strong><small>规则与邻近样本</small></span>
+          </li>
+          <li class="step" data-step="evaluate">
+            <span class="step-index">05</span>
             <span><strong>Agent 评估</strong><small>观察后决策</small></span>
           </li>
           <li class="step" data-step="validate">
-            <span class="step-index">05</span>
+            <span class="step-index">06</span>
             <span><strong>安全校验</strong><small>Safety Gate</small></span>
           </li>
           <li class="step" data-step="cad">
-            <span class="step-index">06</span>
+            <span class="step-index">07</span>
             <span><strong>CAD 创建</strong><small id="backend-step-label">等待确认后端</small></span>
           </li>
         </ol>
@@ -139,16 +144,49 @@
             <li class="trace-node" data-trace="project_context">
               <span>03</span><strong>Mock 工程查询</strong><small>等待只读查询</small>
             </li>
+            <li class="trace-node" data-trace="design_review">
+              <span>04</span><strong>板架智能评审</strong><small>等待规则检查</small>
+            </li>
             <li class="trace-node" data-trace="qwen_decision">
-              <span>04</span><strong>Qwen 结果评估</strong><small>等待工程观察</small>
+              <span>05</span><strong>Qwen 结果评估</strong><small>等待工程观察</small>
             </li>
             <li class="trace-node" data-trace="safety_gate">
-              <span>05</span><strong>Safety Gate</strong><small>等待执行授权</small>
+              <span>06</span><strong>Safety Gate</strong><small>等待执行授权</small>
             </li>
             <li class="trace-node" data-trace="provider">
-              <span>06</span><strong>CAD Provider</strong><small>等待执行</small>
+              <span>07</span><strong>CAD Provider</strong><small>等待执行</small>
             </li>
           </ol>
+        </section>
+
+        <section class="review-console" aria-labelledby="review-heading">
+          <div class="trace-heading">
+            <div>
+              <span class="eyebrow">PRE-CREATION DESIGN REVIEW</span>
+              <h3 id="review-heading">创建前智能评审</h3>
+            </div>
+            <span id="review-outcome">WAITING</span>
+          </div>
+          <div class="review-layout">
+            <ul class="review-list" id="review-list">
+              <li class="review-empty">等待工程对象解析后执行确定性评审。</li>
+            </ul>
+            <div class="review-context">
+              <div>
+                <span class="review-label">显式邻近 Mock 样本</span>
+                <ul id="nearby-panels"><li>尚无可展示样本</li></ul>
+              </div>
+              <div class="plan-revision neutral" id="plan-revision">
+                <span class="review-label">AGENT PLAN REVISION</span>
+                <strong id="plan-revision-state">等待评审</strong>
+                <p id="plan-revision-summary">获得工程观察后，Agent 将决定是否调整计划。</p>
+                <div class="plan-compare">
+                  <div><small>原计划</small><ol id="original-plan"></ol></div>
+                  <div><small>调整后</small><ol id="revised-plan"></ol></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="decision-console" aria-labelledby="decision-heading">
@@ -243,6 +281,22 @@
             <span>⇢</span>
             <div class="provider-box future">Company CAD Adapter → Native CAD API<small>内网替换目标</small></div>
           </div>
+        </section>
+
+        <section class="decision-passport" aria-labelledby="passport-heading">
+          <div class="trace-heading">
+            <div>
+              <span class="eyebrow">DECISION PASSPORT</span>
+              <h3 id="passport-heading">板架决策护照</h3>
+            </div>
+            <span id="passport-state">WAITING</span>
+          </div>
+          <dl id="passport-fields">
+            <div><dt>执行结论</dt><dd>等待任务</dd></div>
+            <div><dt>决策依据</dt><dd>—</dd></div>
+            <div><dt>规则 / 工程版本</dt><dd>—</dd></div>
+            <div><dt>能力边界</dt><dd>CCS、强度、真实几何尚未验证</dd></div>
+          </dl>
         </section>
 
         <section class="execution-result neutral" id="execution-result" aria-live="polite">

@@ -110,6 +110,7 @@ def create_app(
                         {"name": "parse", "status": "error"},
                         {"name": "decision", "status": "skipped"},
                         {"name": "inspect", "status": "skipped"},
+                        {"name": "review", "status": "skipped"},
                         {"name": "evaluate", "status": "skipped"},
                         {"name": "validate", "status": "skipped"},
                         {"name": "cad", "status": "skipped"},
@@ -136,6 +137,12 @@ def create_app(
                                 "label": "Mock 工程查询",
                                 "status": "skipped",
                                 "summary": "未执行工程查询",
+                            },
+                            {
+                                "name": "design_review",
+                                "label": "板架智能评审",
+                                "status": "skipped",
+                                "summary": "未执行创建前评审",
                             },
                             {
                                 "name": "qwen_decision",

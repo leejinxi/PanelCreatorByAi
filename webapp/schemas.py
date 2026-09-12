@@ -17,7 +17,9 @@ AgentRunStatus = Literal[
     "error",
 ]
 ExecutionMode = Literal["mock", "mcp", "unconfigured"]
-StepName = Literal["parse", "decision", "inspect", "evaluate", "validate", "cad"]
+StepName = Literal[
+    "parse", "decision", "inspect", "review", "evaluate", "validate", "cad"
+]
 StepStatus = Literal["success", "attention", "error", "skipped"]
 
 
@@ -61,6 +63,7 @@ TraceNodeName = Literal[
     "qwen_parse",
     "policy_decision",
     "project_context",
+    "design_review",
     "qwen_decision",
     "safety_gate",
     "provider",
@@ -150,6 +153,49 @@ class SafetyGateView(BaseModel):
     reason: str | None = None
 
 
+class NearbyPanelView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    reference_name: str
+    thickness_mm: float = Field(gt=0)
+    material: str
+
+
+class DesignReviewItemView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_id: str
+    title: str
+    status: Literal["passed", "warning", "blocked", "not_checked"]
+    summary: str
+    evidence: list[str] = Field(default_factory=list)
+
+
+class PlanRevisionView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    changed: bool
+    disposition: Literal["unchanged", "proceed_with_notice", "stopped"]
+    original_plan: list[str]
+    revised_plan: list[str]
+    summary: str
+
+
+class DesignReviewView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ruleset_version: str
+    project_revision: str
+    data_source_label: Literal[
+        "Demo Review Rules + Mock Project Context"
+    ] = "Demo Review Rules + Mock Project Context"
+    outcome: Literal["passed", "passed_with_warnings", "blocked"]
+    items: list[DesignReviewItemView]
+    nearby_panels: list[NearbyPanelView] = Field(default_factory=list)
+    plan_revision: PlanRevisionView
+
+
 class ExecutionTraceView(BaseModel):
     """页面透明执行台使用的请求级 Trace。"""
 
@@ -158,6 +204,7 @@ class ExecutionTraceView(BaseModel):
     nodes: list[TraceNodeView]
     decision_steps: list[DecisionStepView] = Field(default_factory=list)
     project_inspection: ProjectInspectionView | None = None
+    design_review: DesignReviewView | None = None
     safety_gate: SafetyGateView = Field(
         default_factory=lambda: SafetyGateView(authorized=False)
     )

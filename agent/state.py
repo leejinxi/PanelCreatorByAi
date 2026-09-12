@@ -5,6 +5,7 @@ from schemas.agent_decision_schema import AgentDecision, AgentDecisionRecord
 from schemas.panel_schema import CadExecutionResult, PanelRequest
 from schemas.boundary_schema import BoundaryParseResult
 from schemas.project_context_schema import ProjectInspectionResult
+from schemas.design_review_schema import DesignReviewReport
 
 
 class AgentState(TypedDict, total=False):
@@ -44,6 +45,7 @@ class AgentState(TypedDict, total=False):
     decision_history: NotRequired[list[AgentDecisionRecord]]
     decision_count: NotRequired[int]
     project_inspection: NotRequired[ProjectInspectionResult | None]
+    design_review: NotRequired[DesignReviewReport | None]
 
     # CAD 节点必须再次检查的确定性执行授权
     execution_authorized: NotRequired[bool]

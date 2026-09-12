@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from schemas.agent_decision_schema import AgentDecision, AgentDecisionRecord
 from schemas.panel_schema import CadExecutionResult, PanelRequest
 from tools.project_context_tools import inspect_project_context
+from tools.design_review_tools import review_panel_design
 from webapp.response_mapper import map_agent_state
 from webapp.schemas import ExecutionTraceView
 
@@ -17,10 +18,12 @@ class WebResponseMapperTests(unittest.TestCase):
             thickness=14,
             material="AH36",
         )
+        inspection = inspect_project_context(panel)
         response = map_agent_state(
             {
                 "panel_request": panel,
-                "project_inspection": inspect_project_context(panel),
+                "project_inspection": inspection,
+                "design_review": review_panel_design(panel, inspection),
                 "decision_history": [
                     AgentDecisionRecord(
                         sequence=1,
@@ -63,7 +66,12 @@ class WebResponseMapperTests(unittest.TestCase):
         self.assertEqual(nodes["qwen_parse"].duration_ms, 120)
         self.assertEqual(nodes["qwen_decision"].duration_ms, 70)
         self.assertEqual(nodes["project_context"].status, "success")
+        self.assertEqual(nodes["design_review"].status, "attention")
         self.assertEqual(nodes["safety_gate"].status, "success")
+        self.assertEqual(
+            response.execution_trace.design_review.outcome,
+            "passed_with_warnings",
+        )
 
     def test_trace_schema_rejects_unknown_fields(self) -> None:
         with self.assertRaises(ValidationError):
@@ -163,7 +171,10 @@ class WebResponseMapperTests(unittest.TestCase):
         self.assertNotIn("llm_raw_output", payload)
         self.assertEqual(
             [step.status for step in response.steps],
-            ["success", "skipped", "skipped", "skipped", "success", "success"],
+            [
+                "success", "skipped", "skipped", "skipped",
+                "skipped", "success", "success",
+            ],
         )
 
     def test_maps_clarification_with_partial_panel(self) -> None:

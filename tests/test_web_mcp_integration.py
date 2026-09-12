@@ -79,13 +79,16 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["cad_result"]["object_id"], "mock-mcp-panel-001")
         self.assertIn("模拟", result["message"])
         self.assertIn("模拟", result["cad_result"]["message"])
-        self.assertEqual([s["status"] for s in result["steps"]], ["success"] * 6)
+        self.assertEqual(
+            [s["status"] for s in result["steps"]],
+            ["success", "success", "success", "attention", "success", "success", "success"],
+        )
         trace = result["execution_trace"]
         self.assertEqual(
             [node["name"] for node in trace["nodes"]],
             [
                 "qwen_parse", "policy_decision", "project_context",
-                "qwen_decision", "safety_gate", "provider",
+                "design_review", "qwen_decision", "safety_gate", "provider",
             ],
         )
         self.assertEqual(trace["provider"], "contract-mock")
@@ -198,4 +201,5 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["cad_result"]["success"])
         self.assertIsNone(result["cad_result"]["object_id"])
         self.assertEqual([s["status"] for s in result["steps"]],
-                         ["success", "success", "success", "success", "success", "error"])
+                         ["success", "success", "success", "attention",
+                          "success", "success", "error"])

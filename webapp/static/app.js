@@ -28,6 +28,16 @@ const inspectionResults = document.querySelector("#inspection-results");
 const safetyGate = document.querySelector("#safety-gate");
 const safetyGateState = document.querySelector("#safety-gate-state");
 const safetyGateReason = document.querySelector("#safety-gate-reason");
+const reviewOutcome = document.querySelector("#review-outcome");
+const reviewList = document.querySelector("#review-list");
+const nearbyPanels = document.querySelector("#nearby-panels");
+const planRevision = document.querySelector("#plan-revision");
+const planRevisionState = document.querySelector("#plan-revision-state");
+const planRevisionSummary = document.querySelector("#plan-revision-summary");
+const originalPlan = document.querySelector("#original-plan");
+const revisedPlan = document.querySelector("#revised-plan");
+const passportState = document.querySelector("#passport-state");
+const passportFields = document.querySelector("#passport-fields");
 const traceElements = new Map(
   [...document.querySelectorAll("[data-trace]")].map((element) => [
     element.dataset.trace,
@@ -57,7 +67,9 @@ let executionMode = "unconfigured";
 
 const DEMO_REQUEST_TIMEOUT_MS = 150000;
 
-const stepOrder = ["parse", "decision", "inspect", "evaluate", "validate", "cad"];
+const stepOrder = [
+  "parse", "decision", "inspect", "review", "evaluate", "validate", "cad",
+];
 const resultPresentation = {
   success: { className: "success", icon: "✓", kicker: "创建完成" },
   clarification: { className: "attention", icon: "!", kicker: "需要补充" },
@@ -279,6 +291,143 @@ function renderDecisionLoop(trace) {
   );
 }
 
+const reviewStatusLabels = {
+  passed: "通过",
+  warning: "提醒",
+  blocked: "阻断",
+  not_checked: "未验证",
+};
+
+function renderDesignReview(trace) {
+  const review = trace?.design_review;
+  reviewList.replaceChildren();
+  nearbyPanels.replaceChildren();
+  originalPlan.replaceChildren();
+  revisedPlan.replaceChildren();
+
+  if (!review) {
+    reviewOutcome.textContent = "NOT RUN";
+    const empty = document.createElement("li");
+    empty.className = "review-empty";
+    empty.textContent = "工程对象尚未唯一解析，本次未执行创建前智能评审。";
+    reviewList.append(empty);
+    const noSample = document.createElement("li");
+    noSample.textContent = "尚无可展示样本";
+    nearbyPanels.append(noSample);
+    planRevision.className = "plan-revision neutral";
+    planRevisionState.textContent = "未形成计划调整";
+    planRevisionSummary.textContent = "需要先获得唯一、可用的工程对象。";
+    return;
+  }
+
+  const outcomeLabels = {
+    passed: "PASSED",
+    passed_with_warnings: "PASSED WITH NOTICE",
+    blocked: "BLOCKED",
+  };
+  reviewOutcome.textContent = outcomeLabels[review.outcome] || review.outcome;
+  review.items.forEach((check) => {
+    const item = document.createElement("li");
+    item.className = `review-${check.status}`;
+    const heading = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = check.title;
+    const status = document.createElement("span");
+    status.textContent = reviewStatusLabels[check.status] || check.status;
+    heading.append(title, status);
+    const summary = document.createElement("p");
+    summary.textContent = check.summary;
+    const rule = document.createElement("small");
+    rule.textContent = check.evidence?.length
+      ? `${check.rule_id} · ${check.evidence.join(" · ")}`
+      : check.rule_id;
+    item.append(heading, summary, rule);
+    reviewList.append(item);
+  });
+
+  if (!review.nearby_panels?.length) {
+    const noSample = document.createElement("li");
+    noSample.textContent = "Mock目录未提供该定位面的邻近样本";
+    nearbyPanels.append(noSample);
+  } else {
+    review.nearby_panels.forEach((panel) => {
+      const item = document.createElement("li");
+      item.textContent = `${panel.name} · ${panel.reference_name} · ${panel.thickness_mm}mm · ${panel.material}`;
+      nearbyPanels.append(item);
+    });
+  }
+
+  const plan = review.plan_revision;
+  planRevision.className = `plan-revision ${plan.disposition}`;
+  planRevisionState.textContent = plan.changed ? "Agent 已调整计划" : "保持原计划";
+  planRevisionSummary.textContent = plan.summary;
+  plan.original_plan.forEach((value) => appendPlanItem(originalPlan, value));
+  plan.revised_plan.forEach((value) => appendPlanItem(revisedPlan, value));
+}
+
+function appendPlanItem(list, value) {
+  const item = document.createElement("li");
+  item.textContent = value;
+  list.append(item);
+}
+
+function renderDecisionPassport(payload) {
+  const trace = payload?.execution_trace;
+  const review = trace?.design_review;
+  const decisions = trace?.decision_steps || [];
+  const finalDecision = decisions.at(-1);
+  const notChecked = (review?.items || [])
+    .filter((item) => item.status === "not_checked")
+    .map((item) => item.title);
+  const conclusion = payload.status === "success"
+    ? `已由 ${trace.provider} 完成模拟创建`
+    : payload.status === "clarification"
+      ? "等待用户澄清，CAD未调用"
+      : `已停止：${payload.error_code || payload.status}`;
+  const rows = [
+    ["执行结论", conclusion],
+    ["最终决策", finalDecision
+      ? `${actionLabels[finalDecision.action] || finalDecision.action} · ${finalDecision.reason_code}`
+      : "未形成可执行决策"],
+    ["规则 / 工程版本", review
+      ? `${review.ruleset_version} / ${review.project_revision}`
+      : trace?.project_inspection?.revision || "未执行评审"],
+    ["计划变化", review?.plan_revision?.summary || "未形成计划调整"],
+    ["能力边界", notChecked.length
+      ? `${notChecked.join("、")}未验证`
+      : "以页面实际评审结果为准"],
+    ["执行对象", payload.cad_result?.object_id || "未创建模拟对象"],
+  ];
+  renderPassportRows(rows);
+  passportState.textContent = payload.status === "success"
+    ? "SIMULATED" : payload.status.toUpperCase();
+}
+
+function renderPassportRows(rows) {
+  passportFields.replaceChildren();
+  rows.forEach(([label, value]) => {
+    const row = document.createElement("div");
+    const term = document.createElement("dt");
+    const detail = document.createElement("dd");
+    term.textContent = label;
+    detail.textContent = value;
+    row.append(term, detail);
+    passportFields.append(row);
+  });
+}
+
+function clearDecisionPassport() {
+  passportState.textContent = "WAITING";
+  renderPassportRows([
+    ["执行结论", "等待任务"],
+    ["最终决策", "—"],
+    ["规则 / 工程版本", "—"],
+    ["计划变化", "—"],
+    ["能力边界", "CCS、强度、真实几何尚未验证"],
+    ["执行对象", "—"],
+  ]);
+}
+
 function renderExecutionTrace(trace) {
   const receivedNodes = trace?.nodes || [];
   const nodes = new Map(receivedNodes.map((node) => [node.name, node]));
@@ -358,6 +507,8 @@ function clearExecutionTrace() {
   mcpRequestOutput.textContent = "等待通过安全校验的请求…";
   mcpResponseOutput.textContent = "尚未调用 MCP Provider。";
   renderDecisionLoop(null);
+  renderDesignReview(null);
+  clearDecisionPassport();
 }
 
 function renderResult(payload) {
@@ -366,6 +517,8 @@ function renderResult(payload) {
   renderMcpInspector(payload.execution_trace);
   renderProviderBoundary(payload.execution_trace);
   renderDecisionLoop(payload.execution_trace);
+  renderDesignReview(payload.execution_trace);
+  renderDecisionPassport(payload);
   const presentation = resultPresentation[payload.status] ?? resultPresentation.error;
   resultElements.container.className = `execution-result ${presentation.className}`;
   resultElements.icon.textContent = presentation.icon;

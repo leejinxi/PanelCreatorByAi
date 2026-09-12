@@ -70,6 +70,8 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="current-provider"', response.text)
         self.assertIn('id="decision-timeline"', response.text)
         self.assertIn('id="safety-gate"', response.text)
+        self.assertIn('id="review-list"', response.text)
+        self.assertIn('id="passport-fields"', response.text)
         self.assertNotIn('id="cad-preview-heading"', response.text)
         self.assertIn("DEMO MODE", response.text)
 
@@ -115,7 +117,7 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("if (!node) return;", js_response.text)
 
         index_response = await self.client.get("/")
-        self.assertIn("agent-trace-v4", index_response.text)
+        self.assertIn("design-review-v1", index_response.text)
 
     async def test_run_endpoint_returns_stable_response(self) -> None:
         response = await self.client.post(
@@ -196,6 +198,11 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["status"], "error")
         self.assertEqual(payload["error_code"], "AGENT_INTERNAL_ERROR")
         self.assertEqual(payload["steps"][0]["status"], "error")
+        self.assertEqual(len(payload["steps"]), 7)
+        self.assertIn(
+            "design_review",
+            [node["name"] for node in payload["execution_trace"]["nodes"]],
+        )
         self.assertNotIn("secret backend detail", response.text)
 
 

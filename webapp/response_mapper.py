@@ -10,13 +10,17 @@ from webapp.schemas import (
     AgentStepView,
     CadResultView,
     DecisionStepView,
+    DesignReviewItemView,
+    DesignReviewView,
     ExecutionMode,
     ExecutionTraceView,
     McpCallView,
     McpResponseView,
+    NearbyPanelView,
     ObjectMatchView,
     PanelView,
     ProjectInspectionView,
+    PlanRevisionView,
     SafetyGateView,
     TraceNodeView,
 )
@@ -142,6 +146,14 @@ def _build_steps(
 ) -> list[AgentStepView]:
     decision_count = len(state.get("decision_history", []) or [])
     inspected = state.get("project_inspection") is not None
+    review = state.get("design_review")
+    review_outcome = getattr(review, "outcome", None)
+    review_status = (
+        "error" if review_outcome == "blocked"
+        else "attention" if review_outcome == "passed_with_warnings"
+        else "success" if review_outcome == "passed"
+        else "skipped"
+    )
     authorized = state.get("execution_authorized") is True
 
     if cad_result is not None:
@@ -155,6 +167,7 @@ def _build_steps(
                 name="inspect",
                 status="success" if inspected else "skipped",
             ),
+            AgentStepView(name="review", status=review_status),
             AgentStepView(
                 name="evaluate",
                 status="success" if decision_count > 1 else "skipped",
@@ -177,6 +190,7 @@ def _build_steps(
                 name="inspect",
                 status="success" if inspected else "skipped",
             ),
+            AgentStepView(name="review", status=review_status),
             AgentStepView(
                 name="evaluate",
                 status="attention" if inspected else "skipped",
@@ -196,6 +210,7 @@ def _build_steps(
                 status="success" if decision_count else "skipped",
             ),
             AgentStepView(name="inspect", status="skipped"),
+            AgentStepView(name="review", status="skipped"),
             AgentStepView(name="evaluate", status="skipped"),
             AgentStepView(name="validate", status="skipped"),
             AgentStepView(name="cad", status="skipped"),
@@ -233,6 +248,7 @@ def _build_steps(
             name="inspect",
             status="success" if inspected else "skipped",
         ),
+        AgentStepView(name="review", status=review_status),
         AgentStepView(
             name="evaluate",
             status="error" if inspected else "skipped",
@@ -312,6 +328,7 @@ def _build_execution_trace(
 
     decisions = _map_decision_steps(state)
     inspection = _map_project_inspection(state)
+    review = _map_design_review(state)
     gate = _map_safety_gate(state, cad_result)
     initial_decision = decisions[0] if decisions else None
     evaluated_decision = decisions[1] if len(decisions) > 1 else None
@@ -331,6 +348,8 @@ def _build_execution_trace(
 
     inspection_status = _inspection_trace_status(inspection)
     inspection_summary = _inspection_trace_summary(inspection)
+    review_status = _review_trace_status(review)
+    review_summary = _review_trace_summary(review)
 
     if evaluated_decision is None:
         evaluation_status = "skipped"
@@ -353,7 +372,11 @@ def _build_execution_trace(
 
     if gate.authorized:
         gate_status = "success"
-        gate_summary = "全部前置条件通过，已授权 CAD 创建"
+        gate_summary = (
+            "评审带提醒通过，已授权按用户参数模拟创建"
+            if review is not None and review.outcome == "passed_with_warnings"
+            else "全部前置条件通过，已授权 CAD 创建"
+        )
     elif inspection is None or (
         evaluated_decision is not None
         and evaluated_decision.action in {"ask_clarification", "stop"}
@@ -393,6 +416,17 @@ def _build_execution_trace(
             details={"data_source": "demo_project.json"},
         ),
         TraceNodeView(
+            name="design_review",
+            label="板架智能评审",
+            status=review_status,
+            summary=review_summary,
+            details={
+                "ruleset_version": review.ruleset_version if review else None,
+                "outcome": review.outcome if review else None,
+                "data_source": "Demo Review Rules + Mock Project Context",
+            },
+        ),
+        TraceNodeView(
             name="qwen_decision",
             label="Qwen 结果评估",
             status=evaluation_status,
@@ -426,6 +460,7 @@ def _build_execution_trace(
         nodes=nodes,
         decision_steps=decisions,
         project_inspection=inspection,
+        design_review=review,
         safety_gate=gate,
         mcp_request=mcp_request,
         mcp_response=mcp_response,
@@ -491,6 +526,29 @@ def _inspection_trace_summary(
     return f"对象 {problem.query}：{problem.status}，等待后续决策"
 
 
+def _review_trace_status(review: DesignReviewView | None) -> str:
+    if review is None:
+        return "skipped"
+    if review.outcome == "blocked":
+        return "error"
+    if review.outcome == "passed_with_warnings":
+        return "attention"
+    return "success"
+
+
+def _review_trace_summary(review: DesignReviewView | None) -> str:
+    if review is None:
+        return "工程对象未解析或评审未执行"
+    counts = {
+        status: sum(item.status == status for item in review.items)
+        for status in ("passed", "warning", "blocked", "not_checked")
+    }
+    return (
+        f"{counts['passed']}项通过，{counts['warning']}项提醒，"
+        f"{counts['blocked']}项阻断，{counts['not_checked']}项未验证"
+    )
+
+
 def _map_decision_steps(state: Mapping[str, Any]) -> list[DecisionStepView]:
     result = []
     for record in state.get("decision_history", []) or []:
@@ -536,6 +594,50 @@ def _map_object_match(data: Mapping[str, Any]) -> ObjectMatchView:
         resolved_name=data.get("resolved_name"),
         candidates=data.get("candidates", []),
     )
+
+
+def _map_design_review(
+    state: Mapping[str, Any],
+) -> DesignReviewView | None:
+    review = state.get("design_review")
+    if review is None:
+        return None
+    try:
+        data = review.model_dump() if hasattr(review, "model_dump") else dict(review)
+        plan = data["plan_revision"]
+        return DesignReviewView(
+            ruleset_version=data["ruleset_version"],
+            project_revision=data["project_revision"],
+            outcome=data["outcome"],
+            items=[
+                DesignReviewItemView(
+                    rule_id=item["rule_id"],
+                    title=item["title"],
+                    status=item["status"],
+                    summary=item["summary"],
+                    evidence=item.get("evidence", []),
+                )
+                for item in data.get("items", [])
+            ],
+            nearby_panels=[
+                NearbyPanelView(
+                    name=item["name"],
+                    reference_name=item["reference_name"],
+                    thickness_mm=item["thickness_mm"],
+                    material=item["material"],
+                )
+                for item in data.get("nearby_panels", [])
+            ],
+            plan_revision=PlanRevisionView(
+                changed=plan["changed"],
+                disposition=plan["disposition"],
+                original_plan=plan["original_plan"],
+                revised_plan=plan["revised_plan"],
+                summary=plan["summary"],
+            ),
+        )
+    except (KeyError, TypeError, ValueError, ValidationError):
+        return None
 
 
 def _map_safety_gate(

@@ -1,0 +1,28 @@
+{
+  "project_id": "demo-ship-001",
+  "revision": "mock-r1",
+  "data_source": "mock",
+  "reference_contexts": [
+    {
+      "reference_name": "FR100",
+      "nearby_panels": [
+        {
+          "panel_id": "existing-panel-fr99",
+          "name": "PANEL_FR99",
+          "reference_name": "FR99",
+          "thickness_mm": 12.0,
+          "material": "AH36",
+          "approval_state": "demo_approved_sample"
+        },
+        {
+          "panel_id": "existing-panel-fr101",
+          "name": "PANEL_FR101",
+          "reference_name": "FR101",
+          "thickness_mm": 14.0,
+          "material": "AH36",
+          "approval_state": "demo_approved_sample"
+        }
+      ]
+    }
+  ]
+}

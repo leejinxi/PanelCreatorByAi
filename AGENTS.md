@@ -14,9 +14,10 @@
 2. `validate`：校验动作与基础参数；从用户原文重放边界追加/替换，强制至少1条合法边界；模型结构无效时最多重试1次。
 3. `decide_before_inspection`：安全策略生成首次 `AgentDecision`，决定是否查询工程上下文。
 4. `inspect_project_context`：在仓库内 Demo JSON 中确定性匹配定位面和全部边界；当前仍是 Mock。
-5. `decide_after_inspection`：Qwen 根据结构化查询结果选择创建、澄清或停止；确定性 fallback / safety override 负责兜底。
-6. `safety_gate`：复核请求、对象匹配、最终动作和决策步数，显式授权后才进入 `cad`。
-7. `cad`：调用稳定 `create_panel()` 契约；Direct Mock 或 MCP Contract Mock 都不创建真实模型。
+5. `design_review`：基于版本化 Demo 规则和显式邻近 Mock 板架执行创建前评审；不进行 CCS、强度或真实几何校核。
+6. `decide_after_inspection`：Qwen 根据结构化查询及评审结果选择创建、澄清或停止；确定性 fallback / safety override 负责兜底。
+7. `safety_gate`：复核请求、对象匹配、评审结果、最终动作和决策步数，显式授权后才进入 `cad`。
+8. `cad`：调用稳定 `create_panel()` 契约；Direct Mock 或 MCP Contract Mock 都不创建真实模型。
 
 安全边界：参数缺失、边界非法或修改不明确时停止并澄清；Demo 目录中对象未找到、歧义、不可用或角色不允许时不得创建；Provider 拒绝和运行异常返回受控错误。Mock 目录匹配不等于真实工程事实，也不验证几何有效性。
 
@@ -27,7 +28,9 @@
 - `tools/reference_plane_tools.py`：历史定位面目录与确定性解析，不在主 Graph 中。
 - `agent/boundary_session.py`：CLI/Web 共用的原文边界多轮规则。
 - `tools/project_context_tools.py`：Demo 工程目录加载、确定性对象匹配与只读查询。
+- `tools/design_review_tools.py`：版本化 Demo 规则、邻近 Mock 样本对比和创建前确定性评审。
 - `mock_data/demo_project.json`：为页面演示精选的 Mock 工程对象，不代表实时 CAD 工程。
+- `mock_data/demo_panel_context.json`：显式配置的邻近板架样本，不代表真实几何邻接。
 - `tools/cad_tools.py`：稳定 CAD 工具契约、后端协议和 Mock 后端。
 - `llm/qwen_client.py`：通过 Ollama HTTP API 调用本地 `qwen2.5:7b`。
 - `tests/`：基于标准库 `unittest` 的单元测试和本地端到端测试。
