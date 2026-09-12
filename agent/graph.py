@@ -492,16 +492,12 @@ def decide_after_inspection(state: AgentState) -> dict:
 def safety_gate(state: AgentState) -> dict:
     decision = state.get("decision")
     inspection = state.get("project_inspection")
-    review = state.get("design_review")
     authorized = (
         state.get("action_plan") is not None
         and state["action_plan"].action == "create_panel"
         and state.get("panel_request") is not None
         and inspection is not None
         and inspection.all_resolved()
-        and review is not None
-        and not review.has_blocker()
-        and review.project_revision == inspection.revision
         and decision is not None
         and decision.next_action == "prepare_creation"
         and state.get("decision_count", 0) <= MAX_DECISION_STEPS
@@ -509,22 +505,11 @@ def safety_gate(state: AgentState) -> dict:
     if authorized:
         return {
             "execution_authorized": True,
-            "authorization_reason": (
-                "SAFETY_CHECKS_PASSED_WITH_REVIEW_WARNING"
-                if review.outcome == "passed_with_warnings"
-                else "ALL_SAFETY_CHECKS_PASSED"
-            ),
+            "authorization_reason": "EXECUTION_PREFLIGHT_PASSED",
             "error": None,
             "error_code": None,
         }
-    if review is None:
-        reason = "DESIGN_REVIEW_MISSING"
-    elif inspection is not None and review.project_revision != inspection.revision:
-        reason = "DESIGN_REVIEW_REVISION_MISMATCH"
-    elif review.has_blocker():
-        reason = "DESIGN_REVIEW_BLOCKED"
-    else:
-        reason = "PROJECT_OBJECT_NOT_RESOLVED"
+    reason = "PROJECT_OBJECT_NOT_RESOLVED"
     return {
         "execution_authorized": False,
         "authorization_reason": reason,
@@ -590,14 +575,7 @@ def route_after_initial_decision(
 
 def route_after_project_inspection(
     state: AgentState,
-) -> Literal["review", "decide"]:
-    inspection = state.get("project_inspection")
-    if (
-        not state.get("error")
-        and inspection is not None
-        and inspection.all_resolved()
-    ):
-        return "review"
+) -> Literal["decide"]:
     return "decide"
 
 
@@ -679,34 +657,6 @@ def _derive_safe_decision(state: AgentState) -> AgentDecision:
 
     problem = _first_inspection_problem(inspection)
     if problem is None:
-        review = state.get("design_review")
-        if review is None:
-            return AgentDecision(
-                next_action="stop",
-                reason_code="AGENT_ERROR",
-                observation="没有获得板架创建前评审结果，无法继续创建。",
-                evidence=["design_review=missing"],
-            )
-        if review.has_blocker():
-            blockers = [
-                item.rule_id for item in review.items if item.status == "blocked"
-            ]
-            return AgentDecision(
-                next_action="stop",
-                reason_code="DESIGN_REVIEW_BLOCKED",
-                observation="创建前评审发现阻断项，Agent 已调整计划并停止创建。",
-                evidence=blockers[:4],
-            )
-        if review.outcome == "passed_with_warnings":
-            warnings = [
-                item.rule_id for item in review.items if item.status == "warning"
-            ]
-            return AgentDecision(
-                next_action="prepare_creation",
-                reason_code="DESIGN_REVIEW_WARNING",
-                observation="创建前评审存在提醒；Agent 保留用户明确参数并携带提醒继续。",
-                evidence=warnings[:4],
-            )
         return AgentDecision(
             next_action="prepare_creation",
             reason_code="ALL_PRECONDITIONS_SATISFIED",
@@ -772,25 +722,23 @@ def _role_label(role: str) -> str:
 def _build_decision_prompt(state: AgentState) -> str:
     panel = state.get("panel_request")
     inspection = state.get("project_inspection")
-    review = state.get("design_review")
     payload = {
         "panel_candidate": panel.model_dump() if panel is not None else None,
         "input_issues": [],
         "project_inspection": (
             inspection.model_dump() if inspection is not None else None
         ),
-        "design_review": review.model_dump() if review is not None else None,
     }
     return f"""
 你是船舶 CAD 板架创建 Agent 的决策节点。只能依据给定的结构化状态选择下一步。
 
 允许动作：
-- prepare_creation：定位面和全部边界均为 resolved，且设计评审没有 blocked。
+- prepare_creation：定位面和全部边界均为 resolved。
 - ask_clarification：存在 not_found 或 ambiguous，用户可以补充或选择。
-- stop：存在 unavailable、not_eligible、设计评审 blocked 或无法安全继续的状态。
+- stop：存在 unavailable、not_eligible 或无法安全继续的状态。
 
 禁止声明未查询对象存在，不得忽略异常匹配状态，不得修改边界比较符，
-不得修改用户明确给出的板厚或材料，不得将 not_checked 描述为通过，
+不得修改用户明确给出的板厚或材料，
 不得声称 CCS、强度、真实几何或真实 CAD 已验证或已创建。
 
 仅返回 JSON，不要 Markdown：
@@ -804,7 +752,7 @@ def _build_decision_prompt(state: AgentState) -> str:
 
 允许原因码：REFERENCE_NOT_FOUND、REFERENCE_AMBIGUOUS、BOUNDARY_NOT_FOUND、
 BOUNDARY_AMBIGUOUS、OBJECT_UNAVAILABLE、OBJECT_NOT_ELIGIBLE、
-ALL_PRECONDITIONS_SATISFIED、DESIGN_REVIEW_WARNING、DESIGN_REVIEW_BLOCKED。
+ALL_PRECONDITIONS_SATISFIED。
 
 当前状态：
 {json.dumps(payload, ensure_ascii=False)}
@@ -831,7 +779,6 @@ builder.add_node("parse", parse_structure)
 builder.add_node("validate", validate_structure)
 builder.add_node("decide_before_inspection", decide_before_inspection)
 builder.add_node("inspect_project_context", inspect_project_context_node)
-builder.add_node("design_review", review_panel_design_node)
 builder.add_node("decide_after_inspection", decide_after_inspection)
 builder.add_node("safety_gate", safety_gate)
 builder.add_node("cad", execute_cad)
@@ -855,9 +802,8 @@ builder.add_conditional_edges(
 builder.add_conditional_edges(
     "inspect_project_context",
     route_after_project_inspection,
-    {"review": "design_review", "decide": "decide_after_inspection"},
+    {"decide": "decide_after_inspection"},
 )
-builder.add_edge("design_review", "decide_after_inspection")
 builder.add_conditional_edges(
     "decide_after_inspection",
     route_after_inspection_decision,

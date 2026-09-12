@@ -36,8 +36,6 @@ const planRevisionState = document.querySelector("#plan-revision-state");
 const planRevisionSummary = document.querySelector("#plan-revision-summary");
 const originalPlan = document.querySelector("#original-plan");
 const revisedPlan = document.querySelector("#revised-plan");
-const passportState = document.querySelector("#passport-state");
-const passportFields = document.querySelector("#passport-fields");
 const traceElements = new Map(
   [...document.querySelectorAll("[data-trace]")].map((element) => [
     element.dataset.trace,
@@ -68,7 +66,7 @@ let executionMode = "unconfigured";
 const DEMO_REQUEST_TIMEOUT_MS = 150000;
 
 const stepOrder = [
-  "parse", "decision", "inspect", "review", "evaluate", "validate", "cad",
+  "parse", "decision", "inspect", "evaluate", "validate", "cad",
 ];
 const resultPresentation = {
   success: { className: "success", icon: "✓", kicker: "创建完成" },
@@ -371,63 +369,6 @@ function appendPlanItem(list, value) {
   list.append(item);
 }
 
-function renderDecisionPassport(payload) {
-  const trace = payload?.execution_trace;
-  const review = trace?.design_review;
-  const decisions = trace?.decision_steps || [];
-  const finalDecision = decisions.at(-1);
-  const notChecked = (review?.items || [])
-    .filter((item) => item.status === "not_checked")
-    .map((item) => item.title);
-  const conclusion = payload.status === "success"
-    ? `已由 ${trace.provider} 完成模拟创建`
-    : payload.status === "clarification"
-      ? "等待用户澄清，CAD未调用"
-      : `已停止：${payload.error_code || payload.status}`;
-  const rows = [
-    ["执行结论", conclusion],
-    ["最终决策", finalDecision
-      ? `${actionLabels[finalDecision.action] || finalDecision.action} · ${finalDecision.reason_code}`
-      : "未形成可执行决策"],
-    ["规则 / 工程版本", review
-      ? `${review.ruleset_version} / ${review.project_revision}`
-      : trace?.project_inspection?.revision || "未执行评审"],
-    ["计划变化", review?.plan_revision?.summary || "未形成计划调整"],
-    ["能力边界", notChecked.length
-      ? `${notChecked.join("、")}未验证`
-      : "以页面实际评审结果为准"],
-    ["执行对象", payload.cad_result?.object_id || "未创建模拟对象"],
-  ];
-  renderPassportRows(rows);
-  passportState.textContent = payload.status === "success"
-    ? "SIMULATED" : payload.status.toUpperCase();
-}
-
-function renderPassportRows(rows) {
-  passportFields.replaceChildren();
-  rows.forEach(([label, value]) => {
-    const row = document.createElement("div");
-    const term = document.createElement("dt");
-    const detail = document.createElement("dd");
-    term.textContent = label;
-    detail.textContent = value;
-    row.append(term, detail);
-    passportFields.append(row);
-  });
-}
-
-function clearDecisionPassport() {
-  passportState.textContent = "WAITING";
-  renderPassportRows([
-    ["执行结论", "等待任务"],
-    ["最终决策", "—"],
-    ["规则 / 工程版本", "—"],
-    ["计划变化", "—"],
-    ["能力边界", "CCS、强度、真实几何尚未验证"],
-    ["执行对象", "—"],
-  ]);
-}
-
 function renderExecutionTrace(trace) {
   const receivedNodes = trace?.nodes || [];
   const nodes = new Map(receivedNodes.map((node) => [node.name, node]));
@@ -508,7 +449,6 @@ function clearExecutionTrace() {
   mcpResponseOutput.textContent = "尚未调用 MCP Provider。";
   renderDecisionLoop(null);
   renderDesignReview(null);
-  clearDecisionPassport();
 }
 
 function renderResult(payload) {
@@ -518,7 +458,6 @@ function renderResult(payload) {
   renderProviderBoundary(payload.execution_trace);
   renderDecisionLoop(payload.execution_trace);
   renderDesignReview(payload.execution_trace);
-  renderDecisionPassport(payload);
   const presentation = resultPresentation[payload.status] ?? resultPresentation.error;
   resultElements.container.className = `execution-result ${presentation.className}`;
   resultElements.icon.textContent = presentation.icon;

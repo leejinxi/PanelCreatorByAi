@@ -5,12 +5,18 @@ from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent.main import run_panel_agent
 from tools.cad_tools import get_cad_backend_name
+from tools.model_error_tools import (
+    analyze_model_errors,
+    build_panel_operation_details,
+    execute_safe_repairs,
+)
+from schemas.model_error_schema import ErrorGovernanceReport, PanelOperationDetail
 from agent.execution_trace import begin_trace, end_trace, snapshot_trace
 from webapp.response_mapper import map_agent_state
 from webapp.schemas import (
@@ -43,6 +49,8 @@ def create_app(
         version="0.1.0",
         description="本地板架创建 Agent 的浏览器接口。",
     )
+    error_tasks: dict[str, ErrorGovernanceReport] = {}
+    operation_details: dict[str, PanelOperationDetail] = {}
     application.mount(
         "/static",
         StaticFiles(directory=STATIC_DIR),
@@ -171,6 +179,51 @@ def create_app(
             )
         finally:
             end_trace(token)
+
+    @application.post(
+        "/api/model-errors/analyze",
+        response_model=ErrorGovernanceReport,
+    )
+    def analyze_errors() -> ErrorGovernanceReport:
+        report = analyze_model_errors()
+        error_tasks[report.task_id] = report
+        for detail in build_panel_operation_details(report):
+            operation_details[detail.operation_id] = detail
+        return report
+
+    @application.post(
+        "/api/model-errors/repair/{task_id}",
+        response_model=ErrorGovernanceReport,
+    )
+    def repair_errors(task_id: str) -> ErrorGovernanceReport:
+        report = error_tasks.get(task_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="错误治理任务不存在。")
+        completed = execute_safe_repairs(report)
+        error_tasks[task_id] = completed
+        for detail in build_panel_operation_details(completed):
+            operation_details[detail.operation_id] = detail
+        return completed
+
+    @application.get(
+        "/api/model-errors/status/{task_id}",
+        response_model=ErrorGovernanceReport,
+    )
+    def error_status(task_id: str) -> ErrorGovernanceReport:
+        report = error_tasks.get(task_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="错误治理任务不存在。")
+        return report
+
+    @application.get(
+        "/api/operations/{operation_id}",
+        response_model=PanelOperationDetail,
+    )
+    def operation_detail(operation_id: str) -> PanelOperationDetail:
+        detail = operation_details.get(operation_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="板架操作记录不存在。")
+        return detail
 
     return application
 

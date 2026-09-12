@@ -72,9 +72,7 @@ class WebAgentDecisionFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trace["decision_steps"][0]["source"], "policy")
         self.assertEqual(trace["decision_steps"][1]["source"], "llm")
         self.assertEqual(trace["project_inspection"]["data_source_label"], "Mock Project Context")
-        self.assertEqual(trace["design_review"]["outcome"], "passed_with_warnings")
-        self.assertEqual(trace["design_review"]["nearby_panels"][0]["name"], "PANEL_FR99")
-        self.assertTrue(trace["design_review"]["plan_revision"]["changed"])
+        self.assertIsNone(trace["design_review"])
         self.assertTrue(trace["safety_gate"]["authorized"])
         self.assertEqual(
             [node["name"] for node in trace["nodes"]],
@@ -114,30 +112,22 @@ class WebAgentDecisionFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(payload["execution_trace"]["safety_gate"]["authorized"])
         create.assert_not_called()
 
-    async def test_review_blocker_is_visible_and_skips_cad(self) -> None:
+    async def test_legacy_review_no_longer_blocks_creation(self) -> None:
         with (
             patch.object(type(graph_module.llm), "invoke", side_effect=[
                 action_output("FR100"),
                 decision_output("prepare_creation", "ALL_PRECONDITIONS_SATISFIED"),
             ]),
-            patch.object(graph_module, "create_panel") as create,
+            patch.object(graph_module, "create_panel", return_value=CadExecutionResult(success=True, message="created", object_id="mock-panel-same-object")) as create,
         ):
             response = await self.client.post("/api/agent/runs", json={
                 "message": "在FR100创建14mm厚AH36板架，边界 >FR100"
             })
 
         payload = response.json()
-        review = payload["execution_trace"]["design_review"]
-        self.assertEqual(payload["status"], "error")
-        self.assertEqual(payload["error_code"], "DESIGN_REVIEW_BLOCKED")
-        self.assertEqual(review["outcome"], "blocked")
-        self.assertTrue(any(
-            item["rule_id"] == "PANEL-DEMO-003"
-            and item["status"] == "blocked"
-            for item in review["items"]
-        ))
-        self.assertEqual(review["plan_revision"]["disposition"], "stopped")
-        create.assert_not_called()
+        self.assertEqual(payload["status"], "success")
+        self.assertIsNone(payload["execution_trace"]["design_review"])
+        create.assert_called_once()
 
     async def test_unknown_reference_is_safety_override(self) -> None:
         with (

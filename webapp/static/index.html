@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="AI Ship CAD Copilot 本地板架创建工作台">
+  <meta name="description" content="AI Ship CAD Copilot 本地演示工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=design-review-v1">
-  <script src="/static/app.js?v=design-review-v1" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=error-governance-v5">
+  <script src="/static/app.js?v=error-governance-v5" defer></script>
+  <script src="/static/error-governance.js?v=error-governance-v5" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -17,7 +18,7 @@
         </span>
         <span class="brand-copy">
           <strong>AI Ship CAD Copilot</strong>
-          <small>板架创建工作台</small>
+          <small>结构设计 Agent 演示工作台</small>
         </span>
       </div>
 
@@ -32,7 +33,27 @@
       </div>
     </header>
 
-    <main class="workspace">
+    <main class="workspace" id="panel-tab" hidden>
+      <section class="automation-context" id="automation-context" hidden>
+        <div class="automation-context-heading">
+          <div>
+            <span class="eyebrow">PANEL AUTO-UPDATE EXPLAINER</span>
+            <h1>板架自动更新说明</h1>
+          </div>
+          <button class="secondary-button" id="back-from-automation" type="button">返回错误治理</button>
+        </div>
+        <p>Agent不是盲目重新创建板架，而是接收CAD错误对象ID，判断是否可重算或更新，并复用下方板架参数解析、工程查询、决策与Execution Preflight链路。</p>
+        <div class="automation-flow">
+          <div><b>01</b><strong>锁定错误对象</strong><small id="automation-targets">等待错误组</small></div>
+          <div><b>02</b><strong>读取CAD候选</strong><small>引用、定位面与边界候选</small></div>
+          <div><b>03</b><strong>决定重算或更新</strong><small>低风险自动，有设计变化则确认</small></div>
+          <div><b>04</b><strong>复核结果</strong><small>父板架恢复后再检查子构件</small></div>
+        </div>
+        <div class="automation-boundary">
+          <strong>当前演示边界</strong>
+          <span>下方保留现有“板架创建”表单，用于展示两类操作共用的Agent决策链；当前Mock创建契约不会真实更新上述错误板架。未来公司CAD通过传入板架ID区分 update 与 createNew。</span>
+        </div>
+      </section>
       <section class="request-panel" aria-labelledby="request-heading">
         <div class="section-heading">
           <span class="eyebrow">01 / COMMAND</span>
@@ -60,7 +81,6 @@
             <button type="button" data-example="请在第100肋位创建一块14mm厚的AH36板架，边界 >SL10 <LV5">智能创建</button>
             <button type="button" data-example="请在主甲板创建一块14mm厚的AH36板架，边界 >SL10">定位面歧义</button>
             <button type="button" data-example="请在FR999创建一块14mm厚的AH36板架，边界 >SL10">对象不存在</button>
-            <button type="button" data-example="请在FR100创建一块14mm厚的AH36板架，边界 >FR100">评审阻断</button>
             <button type="button" data-example="请解释AH36是什么材料">能力边界</button>
           </div>
 
@@ -95,6 +115,24 @@
           <span class="request-id" id="request-id">REQUEST —</span>
         </div>
 
+        <section class="operation-detail" id="operation-detail" aria-labelledby="operation-detail-heading" hidden>
+          <div class="operation-detail-heading">
+            <div>
+              <span class="eyebrow">READ-ONLY OPERATION RECORD</span>
+              <h3 id="operation-detail-heading">板架更新决策详情</h3>
+            </div>
+            <button class="secondary-button" id="back-to-errors" type="button">返回错误治理</button>
+          </div>
+          <div class="operation-detail-grid">
+            <dl id="operation-detail-fields"></dl>
+            <div>
+              <strong>决策依据与安全检查</strong>
+              <ul id="operation-detail-evidence"></ul>
+            </div>
+          </div>
+          <pre id="operation-request-json"></pre>
+        </section>
+
         <ol class="stepper" id="stepper" aria-label="执行进度">
           <li class="step" data-step="parse">
             <span class="step-index">01</span>
@@ -113,15 +151,15 @@
             <span><strong>智能评审</strong><small>规则与邻近样本</small></span>
           </li>
           <li class="step" data-step="evaluate">
-            <span class="step-index">05</span>
+            <span class="step-index">04</span>
             <span><strong>Agent 评估</strong><small>观察后决策</small></span>
           </li>
           <li class="step" data-step="validate">
-            <span class="step-index">06</span>
+            <span class="step-index">05</span>
             <span><strong>安全校验</strong><small>Safety Gate</small></span>
           </li>
           <li class="step" data-step="cad">
-            <span class="step-index">07</span>
+            <span class="step-index">06</span>
             <span><strong>CAD 创建</strong><small id="backend-step-label">等待确认后端</small></span>
           </li>
         </ol>
@@ -148,13 +186,13 @@
               <span>04</span><strong>板架智能评审</strong><small>等待规则检查</small>
             </li>
             <li class="trace-node" data-trace="qwen_decision">
-              <span>05</span><strong>Qwen 结果评估</strong><small>等待工程观察</small>
+              <span>04</span><strong>Qwen 结果评估</strong><small>等待工程观察</small>
             </li>
             <li class="trace-node" data-trace="safety_gate">
-              <span>06</span><strong>Safety Gate</strong><small>等待执行授权</small>
+              <span>05</span><strong>Safety Gate</strong><small>等待执行授权</small>
             </li>
             <li class="trace-node" data-trace="provider">
-              <span>07</span><strong>CAD Provider</strong><small>等待执行</small>
+              <span>06</span><strong>CAD Provider</strong><small>等待执行</small>
             </li>
           </ol>
         </section>
@@ -283,22 +321,6 @@
           </div>
         </section>
 
-        <section class="decision-passport" aria-labelledby="passport-heading">
-          <div class="trace-heading">
-            <div>
-              <span class="eyebrow">DECISION PASSPORT</span>
-              <h3 id="passport-heading">板架决策护照</h3>
-            </div>
-            <span id="passport-state">WAITING</span>
-          </div>
-          <dl id="passport-fields">
-            <div><dt>执行结论</dt><dd>等待任务</dd></div>
-            <div><dt>决策依据</dt><dd>—</dd></div>
-            <div><dt>规则 / 工程版本</dt><dd>—</dd></div>
-            <div><dt>能力边界</dt><dd>CCS、强度、真实几何尚未验证</dd></div>
-          </dl>
-        </section>
-
         <section class="execution-result neutral" id="execution-result" aria-live="polite">
           <div class="result-icon" id="result-icon" aria-hidden="true">·</div>
           <div class="result-copy">
@@ -312,6 +334,76 @@
           </details>
         </section>
       </section>
+    </main>
+
+    <main id="model-errors-tab" class="error-workspace">
+      <section class="error-command">
+        <span class="eyebrow">MODEL ERROR GOVERNANCE</span>
+        <h1>全船结构模型错误治理</h1>
+        <p>CAD负责发现与标记错误；Agent读取Mock CAD错误快照，归并根因、识别级联错误并生成处置计划。</p>
+        <div class="error-actions">
+          <button class="secondary-button scenario-button" id="show-mock-scenario" type="button">了解 Mock 场景</button>
+          <button class="primary-button" id="analyze-errors">分析当前工程错误</button>
+          <button class="secondary-button" id="repair-errors" disabled>执行可恢复项</button>
+        </div>
+        <small id="error-task-meta">尚未读取工程错误快照</small>
+      </section>
+      <ol class="governance-trace" id="governance-trace" aria-label="错误治理执行链路">
+        <li data-governance-step="snapshot"><b>01</b><strong>读取错误快照</strong><small>CAD标记的工程事实</small></li>
+        <li data-governance-step="root-cause"><b>02</b><strong>根因与级联归组</strong><small>避免重复处理子错误</small></li>
+        <li data-governance-step="route"><b>03</b><strong>风险分流</strong><small>自动 / 确认 / 人工 / 异常</small></li>
+        <li data-governance-step="repair"><b>04</b><strong>修复编排</strong><small>先父对象、后依赖对象</small></li>
+        <li data-governance-step="closure"><b>05</b><strong>结果收口</strong><small>复核并生成剩余清单</small></li>
+      </ol>
+      <section class="error-dashboard">
+        <div class="error-metrics" id="error-metrics"></div>
+        <div class="error-groups" id="error-groups">
+          <div class="error-empty">点击“分析当前工程错误”开始Demo。</div>
+        </div>
+      </section>
+      <section class="error-closure" id="error-closure" hidden>
+        <span class="eyebrow">RESULT CLOSURE</span>
+        <h2>结果收口</h2>
+        <div id="closure-content"></div>
+      </section>
+
+      <dialog class="scenario-dialog" id="mock-scenario-dialog" aria-labelledby="scenario-heading">
+        <div class="scenario-dialog-heading">
+          <div>
+            <span class="eyebrow">DEMO ASSUMPTION</span>
+            <h2 id="scenario-heading">Mock 全船模型场景</h2>
+          </div>
+          <button class="dialog-close" id="close-mock-scenario" type="button" aria-label="关闭场景说明">×</button>
+        </div>
+        <p class="scenario-lead">假设一艘货船详细设计模型由 DEMO-REV-17 升级到 DEMO-REV-18。外壳对象替换和关联重算后，CAD 已在工程树中标出一批错误，但设计人员仍需逐个判断原因和处理方式。</p>
+        <div class="scenario-scale" aria-label="假设工程规模">
+          <div><small>全船板架</small><strong>约 8,000</strong><span>千级到万级</span></div>
+          <div><small>板架下子构件</small><strong>约 120,000</strong><span>骨材、肘板、开孔</span></div>
+          <div><small>本次错误快照</small><strong>36</strong><span>精选演示样本</span></div>
+          <div><small>预期根因组</small><strong>4</strong><span>不是36次独立处理</span></div>
+        </div>
+        <div class="scenario-columns">
+          <section>
+            <h3>本次假设</h3>
+            <ul>
+              <li>CAD负责发现错误、提供对象ID、依赖关系和候选修复结果。</li>
+              <li>错误涉及板架及其骨材、肘板、开孔，部分子错误由父对象失效级联产生。</li>
+              <li>Agent负责根因归组、风险分流、修复顺序和剩余任务收口。</li>
+            </ul>
+          </section>
+          <section>
+            <h3>演示边界</h3>
+            <ul>
+              <li>数量级用于说明全船人工排查压力，不代表特定真实船型。</li>
+              <li>36个错误来自固定 Mock JSON，不是实时 CAD 工程查询结果。</li>
+              <li>Agent不做几何校验；执行结果均为模拟，不修改真实模型。</li>
+            </ul>
+          </section>
+        </div>
+        <div class="scenario-dialog-actions">
+          <button class="primary-button" id="start-analysis-from-scenario" type="button">理解场景，开始分析</button>
+        </div>
+      </dialog>
     </main>
   </div>
 </body>

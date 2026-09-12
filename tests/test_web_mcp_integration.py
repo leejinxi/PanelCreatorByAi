@@ -81,7 +81,7 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("模拟", result["cad_result"]["message"])
         self.assertEqual(
             [s["status"] for s in result["steps"]],
-            ["success", "success", "success", "attention", "success", "success", "success"],
+            ["success", "success", "success", "skipped", "success", "success", "success"],
         )
         trace = result["execution_trace"]
         self.assertEqual(
@@ -201,5 +201,5 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["cad_result"]["success"])
         self.assertIsNone(result["cad_result"]["object_id"])
         self.assertEqual([s["status"] for s in result["steps"]],
-                         ["success", "success", "success", "attention",
+                         ["success", "success", "success", "skipped",
                           "success", "success", "error"])

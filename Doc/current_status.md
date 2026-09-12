@@ -2,36 +2,46 @@
 
 更新时间：2026-09-12
 
-代码基线：`afae5a2` — 增加确定性板架创建前智能评审、显式邻近 Mock 样本、计划调整和决策护照。
+代码基线：`afae5a2`；其后为未提交的“全船模型错误治理 Agent”工作区改动。
 
-最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python run_tests.py`，共200项，199项通过，1项真实 Ollama E2E 按设计跳过。
+最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python run_tests.py`，共205项，204项通过，1项真实 Ollama E2E 按设计跳过。
 
 ## 当前阶段
 
-Agent 决策展示增强和板架创建前智能评审已接入主流程。用户必须提供至少1条合法边界；参数校验后 Agent 先决定查询 Mock 工程上下文，对唯一解析的对象执行版本化 Demo 规则评审，再根据查询与评审结果选择创建、澄清或停止。Direct Mock 与 MCP STDIO Contract Mock 均仍只模拟创建，不创建真实 CAD 模型。
+当前产品演示以“全船结构模型错误治理”为唯一主入口，不再使用顶部业务 Tab。错误治理读取显式 Mock CAD 错误快照，由 Agent 展示根因/级联归组、风险分流、修复编排和结果收口；原板架创建页作为自动更新说明和单对象决策详情的下钻能力保留，当前仍不接入真实 CAD，也不会修改真实模型。
 
-评审规则包版本为 `demo-panel-review-1.0`，包含请求完整性、对象可执行性、定位面/边界对象重复、邻近板厚和材料差异，以及 CCS、结构强度、真实 CAD 几何三项能力边界。FR100 的邻近板架由 `demo_panel_context.json` 显式配置为 Mock 样本，不根据 FR 编号推断真实几何邻接。差异项只产生提醒并保留用户明确参数；定位面与边界解析到同一对象时命中 `PANEL-DEMO-003` 并停止创建。
+固定 Demo 快照含36个错误节点、4个根因组和23个级联错误。分流结果为：11个低风险自动重算、15个确认后板架更新、6个拓扑歧义转人工、4个几何内核异常转研发。点击“执行可恢复项”后模拟恢复26个错误，剩余10个形成集中工作清单。
 
-Web 已升级为七段行为链，新增创建前智能评审卡、显式邻近样本、原计划/调整后计划对照和板架决策护照。页面区分通过、提醒、阻断和未验证；决策护照记录最终动作、规则与工程版本、计划变化、能力边界和模拟对象 ID。
+错误分析前可打开“了解 Mock 场景”：页面假设一艘货船详细设计模型从 `DEMO-REV-17` 升级到 `DEMO-REV-18`，以约8,000个板架、约120,000个板架下子构件说明全船人工排查的数量级，并明确36个错误只是精选 Mock 快照、不是实时 CAD 查询，也不代表特定真实船型。
+
+错误组 `GROUP-A` 提供“查看板架决策”只读深链。它通过 `OP-REPAIR-108-01` 读取结构化操作快照，展示来源任务、根因组、目标板架、替换引用、工程版本、决策依据和安全检查；详情视图不会重新调用 CAD。对应 API 为 `/api/model-errors/analyze`、`/api/model-errors/repair/{task_id}`、`/api/model-errors/status/{task_id}` 和 `/api/operations/{operation_id}`。
+
+自动重算组 `GROUP-B` 提供“板架自动更新说明”按钮。点击后下钻到自动更新上下文页，展示错误板架ID、CAD候选、重算/更新决策和父子对象复核顺序，并在同一页面复用现有板架创建/决策链；页面明确说明当前 Mock 创建契约不会真实更新错误板架。
+
+“板架决策护照”展示卡已从页面删除，避免与决策时间线、Safety Gate、执行结果和只读操作记录重复。后端结构化 `AgentDecision`、执行Trace和审计字段继续保留。
+
+原“创建前智能评审”已从默认 Graph 和 Web 主链降级：板架创建只保留参数/边界校验、工程对象查询、Agent 决策、Execution Preflight/Safety Gate 和 CAD Provider。旧 `DesignReviewReport`、规则工具和页面 DOM 暂留作兼容模块，但默认不执行、不展示，也不再作为 Safety Gate 授权条件。
 
 页面的 MCP Call Inspector 已区分运行模式：Direct Mock 成功时显示 `DIRECT MOCK COMPLETE` 和 `RESULT · Direct Mock`，明确说明该模式不产生 MCP Request/Response；只有真实发出 MCP 请求但无响应时才显示“未返回可确认结果”。Safety Gate 阻断和发送前契约/配置拦截也使用各自文案。
 
 `Agent 实际行为路径` 不再使用单一 Local Qwen、LangGraph、Schema 技术组件卡片，而是按真实行为展示 `Qwen 参数解析 → Agent 首次决策 → Mock 工程查询 → Qwen 结果评估 → Safety Gate → CAD Provider`。Trace 仅记录 Qwen 调用阶段和耗时，不保存 Prompt 或模型原文；解析重试累计到参数解析阶段，查询后决策单独计时。
 
-浏览器若仍保留旧五节点页面，而服务端已返回新版六节点 Trace，旧 DOM 无法匹配节点名，曾导致请求结束后残留“正在调用/等待请求”。当前静态资源已升级为 `agent-trace-v4`；新版页面检测到 Trace 节点不匹配时会明确提示刷新，不再显示虚假的等待状态。已打开的旧页面仍需执行一次 `Ctrl+F5` 才能载入新版脚本。
+浏览器若仍保留旧五节点页面，而服务端已返回新版六节点 Trace，旧 DOM 无法匹配节点名，曾导致请求结束后残留“正在调用/等待请求”。当前静态资源已升级为 `error-governance-v5`；创建页只显示六个实际节点，旧评审节点和决策护照不再参与结果展示。已打开的旧页面仍需执行一次 `Ctrl+F5` 才能载入新版脚本。
 
 PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认本轮优先打通通信后，新增已确认的本地实验契约 contracts/boundary_list_0.2.json，并作为 MCP 默认契约。旧 0.1-poc 与历史草案保留；显式使用它们仍在发送前被拦截。Graph 层 Demo 对象匹配已完成，但不等于 Contract Mock 或真实 CAD 内部的几何验证。
 
 ## 主运行链路
 
-用户输入 → LocalQwen 提取动作与候选参数 → 原文边界解析与多轮重放 → `PanelRequest` 校验 → policy 首次决策 → `inspect_project_context` 查询 Demo JSON → `design_review` 执行确定性评审 → Qwen 查询后决策（含 fallback / safety override）→ Safety Gate → CAD Tool → Direct Mock 或 MCP STDIO Contract Mock。
+板架创建：用户输入 → LocalQwen 提取动作与候选参数 → 原文边界解析与多轮重放 → `PanelRequest` 校验 → policy 首次决策 → `inspect_project_context` 查询 Demo JSON → Qwen 查询后决策（含 fallback / safety override）→ Execution Preflight / Safety Gate → CAD Tool → Direct Mock 或 MCP STDIO Contract Mock。
+
+模型错误治理：读取 Mock CAD 错误快照 → 根因/级联归组 → 四类风险分流 → 用户点击确认可恢复批次 → 模拟执行父对象优先的恢复计划 → 统计已恢复与剩余错误 → 可选进入单板架只读操作记录。
 
 - LLM 的 boundaries 输出不作为执行依据；边界只来自用户原文。
 - 当前查询仓库内精选 Demo 工程目录；已知 FR/SL/LV 名称规范化，目录外显式查询词仍保留并返回 `not_found`。
 - 定位面提取排除边界片段；用户没有提供定位面时不能从边界目标补出。
 - 名称或别名支持唯一、未找到、歧义、不可用和角色不允许五类结果；比较符不参与名称匹配。
 - 只有全部对象唯一匹配、最终动作为 `prepare_creation` 且未超过两步决策上限时，Safety Gate 才授权创建。
-- Safety Gate 还要求评审报告存在、无 blocker 且工程版本一致；warning 可携带提醒继续，不能改写 `PanelRequest`。
+- Safety Gate 不再依赖旧设计评审报告；它仍要求参数合法、工程对象唯一匹配、决策动作允许且未超过决策上限。
 - Web 只展示结构化观察、动作、依据和数据源，不展示隐藏思维链。
 
 ## 已实现边界行为
@@ -58,7 +68,7 @@ PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认
 ## 当前测试
 
 Python 3.11.15 / ai_cad_agent 下运行 python -B -X utf8 run_tests.py。
-本批200项：199项通过，1项真实 Ollama E2E 默认跳过。新增覆盖评审 Schema、规则和数据加载、邻近板厚/材料提醒、定位面与边界同对象阻断、评审版本不一致、Agent safety override、七段行为链、Web评审白名单和MCP STDIO兼容；既有 AgentDecision、边界多轮和 Provider 异常回归保持通过。
+本批205项：204项通过，1项真实 Ollama E2E 默认跳过。当前新增覆盖错误快照加载、36/4/23统计、四类分流、26/10结果收口、只读板架操作快照和API 404受控错误。板架创建回归覆盖“不再执行旧评审、Safety Gate不依赖旧评审”，既有 AgentDecision、边界多轮和 Provider 异常测试保持通过。
 另使用真实 Qwen + Direct Mock 浏览器验收：FR100 / 14mm / AH36 / >SL10 显示4项通过、1项提醒、3项未验证，保留14mm并生成模拟对象及决策护照；FR100 / 14mm / AH36 / >FR100 命中 `PANEL-DEMO-003`，计划调整为停止，CAD Provider 未调用。页面控制台无错误。
 显式设置 `RUN_LOCAL_E2E=1` 后，真实 Ollama 成功创建与 unsupported 两段端到端测试通过。
 另通过真实 Qwen 浏览器人工验收：初始“在第100肋位创建14mm厚AH36板架”要求补充边界；补充“边界 >SL10”后 Direct Mock 成功，FR100/14mm/AH36 保留。本轮另通过真实 Qwen + MCP 浏览器验收：无边界时未调用 MCP，补“边界 >SL10”后成功；请求版本0.2-poc，MCP耗时846ms，总耗时6061ms，返回mock-mcp-panel-001。真实 CAD 未验证。服务端空数组、非法符号、空目标、缺字段和多余字段拒绝已通过真实 STDIO 回归，超时和异常通过故障注入验证。
@@ -86,4 +96,4 @@ python -X utf8 -m agent.main
 
 ## 下一步
 
-当前 Demo 主线和板架智能评审增强已经完成。下一阶段应优先保持演示稳定，并在获得公司 CAD API 信息后用 MCP/C++ Provider 替换 `demo_project.json` 与邻近 Mock 样本数据源；Graph、`AgentDecision`、`DesignReviewReport`、Web 时间线与 Safety Gate 契约应保持稳定。真实工程接入前不扩展 RAG、多 Agent、自动几何推断或其他结构类型。
+当前优先完成“错误治理主入口 → 自动更新说明/单板架详情”页面在常用分辨率下的最终视觉验收，并冻结错误治理 Demo 数据。后续真实开发应先与 CAD 团队确认错误快照、对象依赖、重算、更新和复核契约，再用 MCP/C++ Provider 替换 Mock；不要用 RAG 或 LLM 代替工程对象事实与几何校验。
