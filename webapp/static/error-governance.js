@@ -68,8 +68,12 @@
 
   async function fetchJson(url, options = {}) {
     const response = await fetch(url, options);
-    if (!response.ok) throw new Error(`请求失败 (${response.status})`);
-    return response.json();
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = typeof payload?.detail === "string" ? payload.detail : `请求失败 (${response.status})`;
+      throw new Error(detail);
+    }
+    return payload;
   }
 
   const routeLabel = {
@@ -84,7 +88,7 @@
     meta.textContent = `${data.task_id} · ${data.project_name} · ${data.project_revision} · Mock CAD Error Snapshot`;
     const s = data.summary;
     const cards = [
-      ["错误节点", s.total_errors], ["根因组", s.root_groups], ["级联错误", s.cascade_errors],
+      ["错误节点", s.total_errors], ["主要问题", s.root_groups], ["关联错误", s.cascade_errors],
       ["可自动恢复", s.auto_recoverable], ["确认后恢复", s.confirmation_required],
       ["人工处理", s.manual_required], ["Provider异常", s.provider_issues]
     ];
@@ -94,7 +98,7 @@
       const cascade = group.objects.length - group.root_object_ids.length;
       const panelRoot = group.objects.find(item => item.object_type === "panel" && item.is_root);
       const detail = panelRoot && group.candidate?.operation === "update_panel"
-        ? `<button class="detail-link" data-operation="${escapeHtml(group.operation_id)}">查看板架决策</button>` : "";
+        ? `<button class="detail-link" data-operation="${escapeHtml(group.operation_id)}">查看板架更新方案</button>` : "";
       const automation = group.candidate?.operation === "recompute"
         ? `<button class="detail-link automation-link" data-group="${escapeHtml(group.group_id)}">板架自动更新说明</button>` : "";
       return `<article class="error-group route-${group.route}">
@@ -118,7 +122,7 @@
     repair.disabled = data.status === "completed";
     if (data.status === "completed") {
       closure.hidden = false;
-      closureContent.innerHTML = `<strong>处理前 ${s.total_errors} 个错误，恢复 ${data.resolved_error_ids.length} 个，剩余 ${data.remaining_error_ids.length} 个。</strong><p>剩余工作：集中确认6个开孔拓扑候选；提交4个几何内核异常对象。</p>`;
+      closureContent.innerHTML = `<strong>处理前 ${s.total_errors} 个错误，恢复 ${data.resolved_error_ids.length} 个，剩余 ${data.remaining_error_ids.length} 个。</strong><p>剩余工作：人工重选6个肘板边界并预览形体；提交4个几何内核异常对象。</p>`;
     }
   }
 
@@ -130,7 +134,7 @@
     document.querySelector("#request-id").textContent = detail.operation_id;
     operationFields.innerHTML = [
       ["板架对象", detail.panel_id], ["治理任务", detail.task_id],
-      ["根因组", detail.group_id], ["执行状态", detail.status === "planned" ? "待确认（Mock）" : "模拟执行完成"],
+      ["问题组", detail.group_id], ["执行状态", detail.status === "planned" ? "待确认（Mock）" : "模拟执行完成"],
       ["访问模式", "只读审计记录"], ["CAD影响", "仅Mock，不修改真实工程"]
     ].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
     operationEvidence.innerHTML = [detail.decision_summary, ...detail.evidence, ...detail.safety_checks]

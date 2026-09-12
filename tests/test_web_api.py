@@ -117,7 +117,8 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("if (!node) return;", js_response.text)
 
         index_response = await self.client.get("/")
-        self.assertIn("error-governance-v5", index_response.text)
+        self.assertIn("error-governance-v9", index_response.text)
+        self.assertIn("36条未分组的Mock CAD错误", index_response.text)
         self.assertIn('id="model-errors-tab"', index_response.text)
         self.assertIn('id="mock-scenario-dialog"', index_response.text)
         self.assertIn("约 8,000", index_response.text)

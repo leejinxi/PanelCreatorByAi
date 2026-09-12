@@ -15,6 +15,7 @@ from tools.model_error_tools import (
     analyze_model_errors,
     build_panel_operation_details,
     execute_safe_repairs,
+    ModelErrorProviderError,
 )
 from schemas.model_error_schema import ErrorGovernanceReport, PanelOperationDetail
 from agent.execution_trace import begin_trace, end_trace, snapshot_trace
@@ -185,7 +186,13 @@ def create_app(
         response_model=ErrorGovernanceReport,
     )
     def analyze_errors() -> ErrorGovernanceReport:
-        report = analyze_model_errors()
+        try:
+            report = analyze_model_errors()
+        except ModelErrorProviderError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="错误快照与当前服务版本不兼容，请重启演示服务后重试。",
+            ) from exc
         error_tasks[report.task_id] = report
         for detail in build_panel_operation_details(report):
             operation_details[detail.operation_id] = detail

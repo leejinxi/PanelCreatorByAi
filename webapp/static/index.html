@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Ship CAD Copilot 本地演示工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=error-governance-v5">
-  <script src="/static/app.js?v=error-governance-v5" defer></script>
-  <script src="/static/error-governance.js?v=error-governance-v5" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=error-governance-v9">
+  <script src="/static/app.js?v=error-governance-v9" defer></script>
+  <script src="/static/error-governance.js?v=error-governance-v9" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -340,7 +340,7 @@
       <section class="error-command">
         <span class="eyebrow">MODEL ERROR GOVERNANCE</span>
         <h1>全船结构模型错误治理</h1>
-        <p>CAD负责发现与标记错误；Agent读取Mock CAD错误快照，归并根因、识别级联错误并生成处置计划。</p>
+        <p>CAD负责发现与标记错误；Agent读取36条未分组的Mock CAD错误，沿对象依赖识别主要问题、合并关联错误并生成处置计划。</p>
         <div class="error-actions">
           <button class="secondary-button scenario-button" id="show-mock-scenario" type="button">了解 Mock 场景</button>
           <button class="primary-button" id="analyze-errors">分析当前工程错误</button>
@@ -350,7 +350,7 @@
       </section>
       <ol class="governance-trace" id="governance-trace" aria-label="错误治理执行链路">
         <li data-governance-step="snapshot"><b>01</b><strong>读取错误快照</strong><small>CAD标记的工程事实</small></li>
-        <li data-governance-step="root-cause"><b>02</b><strong>根因与级联归组</strong><small>避免重复处理子错误</small></li>
+        <li data-governance-step="root-cause"><b>02</b><strong>问题归类与关联合并</strong><small>避免重复处理子错误</small></li>
         <li data-governance-step="route"><b>03</b><strong>风险分流</strong><small>自动 / 确认 / 人工 / 异常</small></li>
         <li data-governance-step="repair"><b>04</b><strong>修复编排</strong><small>先父对象、后依赖对象</small></li>
         <li data-governance-step="closure"><b>05</b><strong>结果收口</strong><small>复核并生成剩余清单</small></li>
@@ -375,12 +375,12 @@
           </div>
           <button class="dialog-close" id="close-mock-scenario" type="button" aria-label="关闭场景说明">×</button>
         </div>
-        <p class="scenario-lead">假设一艘货船详细设计模型由 DEMO-REV-17 升级到 DEMO-REV-18。外壳对象替换和关联重算后，CAD 已在工程树中标出一批错误，但设计人员仍需逐个判断原因和处理方式。</p>
+        <p class="scenario-lead">假设板架边界开发方案由0.1-poc四向字段升级为0.2-poc边界列表，货船详细设计模型随之从 DEMO-REV-17 升级到 DEMO-REV-18。批量数据迁移与关联重算后，CAD 已在工程树中标出一批错误，但设计人员仍需逐个判断原因和处理方式。</p>
         <div class="scenario-scale" aria-label="假设工程规模">
           <div><small>全船板架</small><strong>约 8,000</strong><span>千级到万级</span></div>
           <div><small>板架下子构件</small><strong>约 120,000</strong><span>骨材、肘板、开孔</span></div>
           <div><small>本次错误快照</small><strong>36</strong><span>精选演示样本</span></div>
-          <div><small>预期根因组</small><strong>4</strong><span>不是36次独立处理</span></div>
+          <div><small>预期主要问题</small><strong>4</strong><span>不是36次独立处理</span></div>
         </div>
         <div class="scenario-columns">
           <section>
@@ -388,7 +388,7 @@
             <ul>
               <li>CAD负责发现错误、提供对象ID、依赖关系和候选修复结果。</li>
               <li>错误涉及板架及其骨材、肘板、开孔，部分子错误由父对象失效级联产生。</li>
-              <li>Agent负责根因归组、风险分流、修复顺序和剩余任务收口。</li>
+              <li>Agent负责从未分组错误中识别主要问题、关联归并、风险分流、修复顺序和剩余任务收口。</li>
             </ul>
           </section>
           <section>

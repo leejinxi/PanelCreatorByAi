@@ -3,81 +3,69 @@
   "project_name": "Demo Cargo Vessel",
   "project_revision": "DEMO-REV-18",
   "data_source": "mock",
-  "groups": [
+  "change_events": [
     {
-      "group_id": "GROUP-A",
-      "title": "外壳引用已被新版对象替换",
-      "root_cause_code": "BOUNDARY_REFERENCE_REPLACED",
-      "root_object_ids": ["PANEL-FR108"],
-      "objects": [
-        {"object_id":"PANEL-FR108","object_type":"panel","parent_id":null,"error_code":"BOUNDARY_REFERENCE_LOST","is_root":true},
-        {"object_id":"STF-108-01","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-108-02","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-108-03","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-108-04","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-108-05","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-108-06","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"BRK-108-01","object_type":"bracket","parent_id":"STF-108-01","error_code":"SUPPORT_OBJECT_INVALID"},
-        {"object_id":"BRK-108-02","object_type":"bracket","parent_id":"STF-108-02","error_code":"SUPPORT_OBJECT_INVALID"},
-        {"object_id":"BRK-108-03","object_type":"bracket","parent_id":"STF-108-03","error_code":"SUPPORT_OBJECT_INVALID"},
-        {"object_id":"BRK-108-04","object_type":"bracket","parent_id":"STF-108-04","error_code":"SUPPORT_OBJECT_INVALID"},
-        {"object_id":"OPEN-108-01","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
-        {"object_id":"OPEN-108-02","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
-        {"object_id":"OPEN-108-03","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
-        {"object_id":"OPEN-108-04","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"}
-      ],
-      "evidence": ["CAD错误码：BOUNDARY_REFERENCE_LOST", "旧外壳对象已被SHELL-PORT-REV2替换", "CAD返回唯一更新候选"],
-      "route": "confirm_then_execute",
-      "operation_id": "OP-REPAIR-108-01",
-      "candidate": {"candidate_id":"REPAIR-108-01","operation":"update_panel","provider_validation":"passed","ambiguity_count":1,"changes_design_intent":true}
-    },
-    {
-      "group_id": "GROUP-B",
-      "title": "父板架需要重新计算",
-      "root_cause_code": "PANEL_RECOMPUTE_REQUIRED",
-      "root_object_ids": ["PANEL-FR104", "PANEL-FR106"],
-      "objects": [
-        {"object_id":"PANEL-FR104","object_type":"panel","parent_id":null,"error_code":"RECOMPUTE_REQUIRED","is_root":true},
-        {"object_id":"PANEL-FR106","object_type":"panel","parent_id":null,"error_code":"RECOMPUTE_REQUIRED","is_root":true},
-        {"object_id":"STF-104-01","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-104-02","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-104-03","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-104-04","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-104-05","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-106-01","object_type":"stiffener","parent_id":"PANEL-FR106","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"STF-106-02","object_type":"stiffener","parent_id":"PANEL-FR106","error_code":"PARENT_OBJECT_INVALID"},
-        {"object_id":"BRK-104-01","object_type":"bracket","parent_id":"STF-104-01","error_code":"SUPPORT_OBJECT_INVALID"},
-        {"object_id":"OPEN-106-01","object_type":"opening","parent_id":"PANEL-FR106","error_code":"HOST_PANEL_INVALID"}
-      ],
-      "evidence": ["CAD错误码：RECOMPUTE_REQUIRED", "两个父板架共享同一低风险重算策略"],
-      "route": "auto_execute",
-      "candidate": {"candidate_id":"RECOMPUTE-GROUP-B","operation":"recompute","provider_validation":"passed","ambiguity_count":0,"changes_design_intent":false}
-    },
-    {
-      "group_id":"GROUP-C","title":"开孔存在多个拓扑候选","root_cause_code":"OPENING_TOPOLOGY_AMBIGUOUS",
-      "root_object_ids":["OPEN-201","OPEN-202","OPEN-203","OPEN-204","OPEN-205","OPEN-206"],
-      "objects":[
-        {"object_id":"OPEN-201","object_type":"opening","parent_id":"PANEL-FR120","error_code":"TOPOLOGY_AMBIGUOUS","is_root":true},
-        {"object_id":"OPEN-202","object_type":"opening","parent_id":"PANEL-FR121","error_code":"TOPOLOGY_AMBIGUOUS","is_root":true},
-        {"object_id":"OPEN-203","object_type":"opening","parent_id":"PANEL-FR122","error_code":"TOPOLOGY_AMBIGUOUS","is_root":true},
-        {"object_id":"OPEN-204","object_type":"opening","parent_id":"PANEL-FR123","error_code":"TOPOLOGY_AMBIGUOUS","is_root":true},
-        {"object_id":"OPEN-205","object_type":"opening","parent_id":"PANEL-FR124","error_code":"TOPOLOGY_AMBIGUOUS","is_root":true},
-        {"object_id":"OPEN-206","object_type":"opening","parent_id":"PANEL-FR125","error_code":"TOPOLOGY_AMBIGUOUS","is_root":true}
-      ],
-      "evidence":["CAD为每个开孔返回多个拓扑候选","Agent不能代替设计人员选择几何"],"route":"manual",
-      "candidate":{"candidate_id":"MANUAL-OPENINGS","operation":"manual_topology_selection","provider_validation":"not_run","ambiguity_count":2,"changes_design_intent":true}
-    },
-    {
-      "group_id":"GROUP-D","title":"几何内核运行异常","root_cause_code":"GEOMETRY_KERNEL_ERROR",
-      "root_object_ids":["STF-K01","STF-K02","BRK-K01","OPEN-K01"],
-      "objects":[
-        {"object_id":"STF-K01","object_type":"stiffener","parent_id":"PANEL-K01","error_code":"GEOMETRY_KERNEL_ERROR","is_root":true},
-        {"object_id":"STF-K02","object_type":"stiffener","parent_id":"PANEL-K02","error_code":"GEOMETRY_KERNEL_ERROR","is_root":true},
-        {"object_id":"BRK-K01","object_type":"bracket","parent_id":"STF-K03","error_code":"GEOMETRY_KERNEL_ERROR","is_root":true},
-        {"object_id":"OPEN-K01","object_type":"opening","parent_id":"PANEL-K04","error_code":"GEOMETRY_KERNEL_ERROR","is_root":true}
-      ],
-      "evidence":["CAD未返回可验证修复候选","保留对象和版本用于研发排查"],"route":"provider_issue",
-      "candidate":{"candidate_id":"REPORT-KERNEL","operation":"report_provider_issue","provider_validation":"not_run","ambiguity_count":0,"changes_design_intent":false}
+      "event_id": "BOUNDARY-MIGRATION-DEMO-18",
+      "event_type": "boundary_schema_upgrade",
+      "source_schema_version": "0.1-poc",
+      "target_schema_version": "0.2-poc",
+      "migration_batch_id": "BOUNDARY-MIGRATION-DEMO-18"
     }
+  ],
+  "errors": [
+    {"object_id":"PANEL-FR108","object_type":"panel","parent_id":null,"error_code":"BOUNDARY_DATA_MIGRATION_FAILED","details":{"missing_boundary_count":1}},
+    {"object_id":"STF-108-01","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-108-02","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-108-03","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-108-04","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-108-05","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-108-06","object_type":"stiffener","parent_id":"PANEL-FR108","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"BRK-108-01","object_type":"bracket","parent_id":"STF-108-01","error_code":"SUPPORT_OBJECT_INVALID"},
+    {"object_id":"BRK-108-02","object_type":"bracket","parent_id":"STF-108-02","error_code":"SUPPORT_OBJECT_INVALID"},
+    {"object_id":"BRK-108-03","object_type":"bracket","parent_id":"STF-108-03","error_code":"SUPPORT_OBJECT_INVALID"},
+    {"object_id":"BRK-108-04","object_type":"bracket","parent_id":"STF-108-04","error_code":"SUPPORT_OBJECT_INVALID"},
+    {"object_id":"OPEN-108-01","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
+    {"object_id":"OPEN-108-02","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
+    {"object_id":"OPEN-108-03","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
+    {"object_id":"OPEN-108-04","object_type":"opening","parent_id":"PANEL-FR108","error_code":"HOST_PANEL_INVALID"},
+
+    {"object_id":"PANEL-FR104","object_type":"panel","parent_id":null,"error_code":"RECOMPUTE_REQUIRED"},
+    {"object_id":"PANEL-FR106","object_type":"panel","parent_id":null,"error_code":"RECOMPUTE_REQUIRED"},
+    {"object_id":"STF-104-01","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-104-02","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-104-03","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-104-04","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-104-05","object_type":"stiffener","parent_id":"PANEL-FR104","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-106-01","object_type":"stiffener","parent_id":"PANEL-FR106","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"STF-106-02","object_type":"stiffener","parent_id":"PANEL-FR106","error_code":"PARENT_OBJECT_INVALID"},
+    {"object_id":"BRK-104-01","object_type":"bracket","parent_id":"STF-104-01","error_code":"SUPPORT_OBJECT_INVALID"},
+    {"object_id":"OPEN-106-01","object_type":"opening","parent_id":"PANEL-FR106","error_code":"HOST_PANEL_INVALID"},
+
+    {"object_id":"BRK-201","object_type":"bracket","parent_id":"PANEL-FR120","error_code":"PANEL_NORMAL_CHANGED","details":{"changed_dependency_property":"panel_normal"}},
+    {"object_id":"BRK-202","object_type":"bracket","parent_id":"PANEL-FR121","error_code":"PANEL_NORMAL_CHANGED","details":{"changed_dependency_property":"panel_normal"}},
+    {"object_id":"BRK-203","object_type":"bracket","parent_id":"PANEL-FR122","error_code":"PANEL_NORMAL_CHANGED","details":{"changed_dependency_property":"panel_normal"}},
+    {"object_id":"BRK-204","object_type":"bracket","parent_id":"STF-FR123-01","error_code":"STIFFENER_MOUNT_FACE_CHANGED","details":{"changed_dependency_property":"stiffener_mount_face"}},
+    {"object_id":"BRK-205","object_type":"bracket","parent_id":"STF-FR124-01","error_code":"STIFFENER_MOUNT_FACE_CHANGED","details":{"changed_dependency_property":"stiffener_mount_face"}},
+    {"object_id":"BRK-206","object_type":"bracket","parent_id":"STF-FR125-01","error_code":"STIFFENER_MOUNT_FACE_CHANGED","details":{"changed_dependency_property":"stiffener_mount_face"}},
+
+    {"object_id":"STF-K01","object_type":"stiffener","parent_id":"PANEL-K01","error_code":"GEOMETRY_KERNEL_ERROR","details":{"diagnostic_id":"KERNEL-DIAG-001"}},
+    {"object_id":"STF-K02","object_type":"stiffener","parent_id":"PANEL-K02","error_code":"GEOMETRY_KERNEL_ERROR","details":{"diagnostic_id":"KERNEL-DIAG-002"}},
+    {"object_id":"BRK-K01","object_type":"bracket","parent_id":"STF-K03","error_code":"GEOMETRY_KERNEL_ERROR","details":{"diagnostic_id":"KERNEL-DIAG-003"}},
+    {"object_id":"OPEN-K01","object_type":"opening","parent_id":"PANEL-K04","error_code":"GEOMETRY_KERNEL_ERROR","details":{"diagnostic_id":"KERNEL-DIAG-004"}}
+  ],
+  "diagnostics": [
+    {"object_id":"PANEL-FR108","operation":"update_panel","provider_validation":"passed","candidate_object_ids":["LONG-BHD-02"],"changes_design_intent":false},
+    {"object_id":"PANEL-FR104","operation":"recompute","provider_validation":"passed","candidate_object_ids":["PANEL-FR104"],"changes_design_intent":false},
+    {"object_id":"PANEL-FR106","operation":"recompute","provider_validation":"passed","candidate_object_ids":["PANEL-FR106"],"changes_design_intent":false},
+    {"object_id":"BRK-201","operation":"manual_boundary_reselection","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":true},
+    {"object_id":"BRK-202","operation":"manual_boundary_reselection","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":true},
+    {"object_id":"BRK-203","operation":"manual_boundary_reselection","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":true},
+    {"object_id":"BRK-204","operation":"manual_boundary_reselection","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":true},
+    {"object_id":"BRK-205","operation":"manual_boundary_reselection","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":true},
+    {"object_id":"BRK-206","operation":"manual_boundary_reselection","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":true},
+    {"object_id":"STF-K01","operation":"report_provider_issue","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":false},
+    {"object_id":"STF-K02","operation":"report_provider_issue","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":false},
+    {"object_id":"BRK-K01","operation":"report_provider_issue","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":false},
+    {"object_id":"OPEN-K01","operation":"report_provider_issue","provider_validation":"not_run","candidate_object_ids":[],"changes_design_intent":false}
   ]
 }
