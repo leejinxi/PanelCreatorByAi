@@ -270,22 +270,6 @@ def _build_execution_trace(
         "success" if has_parsed or status == "unsupported" else "error"
     )
 
-    if status == "clarification":
-        schema_status = "attention"
-        schema_summary = "参数缺失或存在待修正问题，已停止 CAD 调用"
-    elif status == "unsupported":
-        schema_status = "skipped"
-        schema_summary = "当前意图不属于 create_panel"
-    elif state.get("panel_request") is not None:
-        schema_status = "success"
-        schema_summary = "PanelRequest 强类型校验通过"
-    elif llm_status == "error":
-        schema_status = "skipped"
-        schema_summary = "模型阶段失败，未进入参数校验"
-    else:
-        schema_status = "error"
-        schema_summary = "参数未通过 PanelRequest 校验"
-
     mcp_request_data = trace.get("mcp_request")
     mcp_response_data = trace.get("mcp_response")
     mcp_request = (
@@ -299,22 +283,9 @@ def _build_execution_trace(
     ):
         mcp_response = McpResponseView.model_validate(mcp_response_data)
 
-    if mode != "mcp":
-        mcp_status = "skipped"
-        mcp_summary = "当前使用 Direct Mock，未经过 MCP"
-    elif mcp_request is None:
-        mcp_status = "skipped"
-        mcp_summary = "本地校验或配置检查已阻止 MCP 调用"
-    elif cad_result is not None and cad_result.success:
-        mcp_status = "success"
-        mcp_summary = "tools/call 已通过 STDIO 完成"
-    else:
-        mcp_status = "error"
-        mcp_summary = "MCP 已返回业务失败" if mcp_response else "已尝试 MCP 调用，未获得有效结果"
-
     if mode == "mcp":
         provider = "contract-mock"
-        provider_label = "Contract Mock"
+        provider_label = "MCP Contract Mock"
     elif mode == "mock":
         provider = "direct-mock"
         provider_label = "Direct Mock"
@@ -339,79 +310,185 @@ def _build_execution_trace(
         provider_status = "skipped"
         provider_summary = "未执行 CAD Provider"
 
-    graph_status = "error" if status == "error" and llm_status == "error" else (
-        "attention" if status == "clarification" else "success"
+    decisions = _map_decision_steps(state)
+    inspection = _map_project_inspection(state)
+    gate = _map_safety_gate(state, cad_result)
+    initial_decision = decisions[0] if decisions else None
+    evaluated_decision = decisions[1] if len(decisions) > 1 else None
+
+    policy_status = (
+        "skipped" if initial_decision is None
+        else "success" if initial_decision.action == "inspect_project_context"
+        else "attention"
     )
-    graph_summary = {
-        "success": "路由：parse -> validate -> decide -> inspect -> decide -> safety_gate -> cad",
-        "clarification": (
-            "路由在 Mock 工程查询后的 Agent 评估阶段暂停"
-            if state.get("project_inspection") is not None
-            else "路由在参数分析后的 Agent 决策阶段暂停"
-        ),
-        "unsupported": "路由：parse -> validate -> decide -> END",
-        "error": (
-            "路由在模型阶段受控停止"
-            if llm_status == "error"
-            else "路由在执行阶段受控停止"
-        ),
-    }[status]
+    policy_summary = (
+        "参数有效，决定先查询工程事实"
+        if initial_decision and initial_decision.action == "inspect_project_context"
+        else "发现缺参或能力边界，流程不进入工程查询"
+        if initial_decision
+        else "需求解析未产生可执行决策"
+    )
+
+    inspection_status = _inspection_trace_status(inspection)
+    inspection_summary = _inspection_trace_summary(inspection)
+
+    if evaluated_decision is None:
+        evaluation_status = "skipped"
+        evaluation_summary = "未获得工程观察，无需二次模型评估"
+    elif evaluated_decision.source == "llm":
+        evaluation_status = (
+            "success" if evaluated_decision.action == "prepare_creation"
+            else "attention" if evaluated_decision.action == "ask_clarification"
+            else "error"
+        )
+        evaluation_summary = (
+            f"根据查询结果选择：{_decision_action_label(evaluated_decision.action)}"
+        )
+    elif evaluated_decision.source == "safety_override":
+        evaluation_status = "attention"
+        evaluation_summary = "Qwen 建议与工程事实冲突，已由安全规则覆盖"
+    else:
+        evaluation_status = "attention"
+        evaluation_summary = "Qwen 决策不可用，确定性规则已接管"
+
+    if gate.authorized:
+        gate_status = "success"
+        gate_summary = "全部前置条件通过，已授权 CAD 创建"
+    elif inspection is None or (
+        evaluated_decision is not None
+        and evaluated_decision.action in {"ask_clarification", "stop"}
+    ):
+        gate_status = "skipped"
+        gate_summary = "Agent 已停止或请求澄清，未进入执行授权"
+    else:
+        gate_status = "error"
+        gate_summary = "安全门禁拒绝 CAD 创建"
 
     nodes = [
         TraceNodeView(
-            name="llm",
-            label="Local Qwen",
+            name="qwen_parse",
+            label="Qwen 参数解析",
             status=llm_status,
-            duration_ms=_optional_duration(trace.get("llm_duration_ms")),
-            summary="本地模型已生成结构化候选参数"
+            duration_ms=_llm_phase_duration(trace, "parse"),
+            summary="已生成结构化板架候选参数"
             if llm_status == "success"
-            else "本地模型未返回可用参数",
+            else "未返回可用的板架候选参数",
             details={
                 "model": "qwen2.5:7b",
-                "data": "candidate parameters and bounded decision",
-                "call_count": trace.get("llm_call_count", 0),
+                "phase": "parse",
             },
         ),
         TraceNodeView(
-            name="graph",
-            label="LangGraph",
-            status=graph_status,
-            summary=graph_summary,
-            details={"policy": "validated requests only"},
+            name="policy_decision",
+            label="Agent 首次决策",
+            status=policy_status,
+            summary=policy_summary,
+            details={"source": "policy"},
         ),
         TraceNodeView(
-            name="schema",
-            label="Pydantic Schema",
-            status=schema_status,
-            summary=schema_summary,
-            details={"schema": "PanelRequest", "extra": "forbid"},
+            name="project_context",
+            label="Mock 工程查询",
+            status=inspection_status,
+            summary=inspection_summary,
+            details={"data_source": "demo_project.json"},
         ),
         TraceNodeView(
-            name="mcp",
-            label="MCP STDIO",
-            status=mcp_status,
-            duration_ms=_optional_duration(trace.get("mcp_duration_ms")),
-            summary=mcp_summary,
-            details={"transport": "stdio", "tool": "create_panel"},
+            name="qwen_decision",
+            label="Qwen 结果评估",
+            status=evaluation_status,
+            duration_ms=_llm_phase_duration(trace, "decision"),
+            summary=evaluation_summary,
+            details={
+                "source": evaluated_decision.source if evaluated_decision else None,
+                "phase": "decision",
+            },
+        ),
+        TraceNodeView(
+            name="safety_gate",
+            label="Safety Gate",
+            status=gate_status,
+            summary=gate_summary,
+            details={"authorized": gate.authorized},
         ),
         TraceNodeView(
             name="provider",
             label=provider_label,
             status=provider_status,
+            duration_ms=(
+                _optional_duration(trace.get("mcp_duration_ms"))
+                if mode == "mcp" else None
+            ),
             summary=provider_summary,
             details={"simulated": True},
         ),
     ]
     return ExecutionTraceView(
         nodes=nodes,
-        decision_steps=_map_decision_steps(state),
-        project_inspection=_map_project_inspection(state),
-        safety_gate=_map_safety_gate(state, cad_result),
+        decision_steps=decisions,
+        project_inspection=inspection,
+        safety_gate=gate,
         mcp_request=mcp_request,
         mcp_response=mcp_response,
         provider=provider,
         total_ms=_optional_duration(trace.get("total_ms")),
     )
+
+
+def _llm_phase_duration(
+    trace: Mapping[str, Any],
+    phase: str,
+) -> int | None:
+    calls = trace.get("llm_calls")
+    if not isinstance(calls, list):
+        return None
+    durations = [
+        item.get("duration_ms")
+        for item in calls
+        if isinstance(item, Mapping) and item.get("phase") == phase
+    ]
+    valid = [
+        value for value in durations
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    return round(sum(valid)) if valid else None
+
+
+def _decision_action_label(action: str) -> str:
+    return {
+        "inspect_project_context": "查询工程上下文",
+        "ask_clarification": "请求用户补充",
+        "prepare_creation": "准备创建板架",
+        "stop": "停止执行",
+    }.get(action, action)
+
+
+def _inspection_trace_status(
+    inspection: ProjectInspectionView | None,
+) -> str:
+    if inspection is None:
+        return "skipped"
+    statuses = [
+        inspection.reference_plane.status,
+        *(item.status for item in inspection.boundaries),
+    ]
+    if all(value == "resolved" for value in statuses):
+        return "success"
+    if any(value in {"unavailable", "not_eligible"} for value in statuses):
+        return "error"
+    return "attention"
+
+
+def _inspection_trace_summary(
+    inspection: ProjectInspectionView | None,
+) -> str:
+    if inspection is None:
+        return "未执行只读工程对象查询"
+    matches = [inspection.reference_plane, *inspection.boundaries]
+    resolved = sum(item.status == "resolved" for item in matches)
+    if resolved == len(matches):
+        return f"定位面及 {len(inspection.boundaries)} 条边界均唯一匹配"
+    problem = next(item for item in matches if item.status != "resolved")
+    return f"对象 {problem.query}：{problem.status}，等待后续决策"
 
 
 def _map_decision_steps(state: Mapping[str, Any]) -> list[DecisionStepView]:

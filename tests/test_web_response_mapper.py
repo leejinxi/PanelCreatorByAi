@@ -2,12 +2,69 @@ import unittest
 
 from pydantic import ValidationError
 
+from schemas.agent_decision_schema import AgentDecision, AgentDecisionRecord
 from schemas.panel_schema import CadExecutionResult, PanelRequest
+from tools.project_context_tools import inspect_project_context
 from webapp.response_mapper import map_agent_state
 from webapp.schemas import ExecutionTraceView
 
 
 class WebResponseMapperTests(unittest.TestCase):
+    def test_maps_agent_behavior_chain_and_separate_qwen_durations(self) -> None:
+        panel = PanelRequest(
+            boundaries=[{"operator": ">", "target": "SL10"}],
+            reference_plane="FR100",
+            thickness=14,
+            material="AH36",
+        )
+        response = map_agent_state(
+            {
+                "panel_request": panel,
+                "project_inspection": inspect_project_context(panel),
+                "decision_history": [
+                    AgentDecisionRecord(
+                        sequence=1,
+                        source="policy",
+                        decision=AgentDecision(
+                            next_action="inspect_project_context",
+                            reason_code="PROJECT_CONTEXT_UNVERIFIED",
+                            observation="需要查询工程事实。",
+                        ),
+                    ),
+                    AgentDecisionRecord(
+                        sequence=2,
+                        source="llm",
+                        decision=AgentDecision(
+                            next_action="prepare_creation",
+                            reason_code="ALL_PRECONDITIONS_SATISFIED",
+                            observation="对象均已唯一匹配。",
+                        ),
+                    ),
+                ],
+                "execution_authorized": True,
+                "authorization_reason": "ALL_SAFETY_CHECKS_PASSED",
+                "cad_result": CadExecutionResult(
+                    success=True,
+                    message="created",
+                    object_id="mock-trace-001",
+                ),
+            },
+            request_id="TRACE-BEHAVIOR",
+            trace={
+                "llm_calls": [
+                    {"phase": "parse", "duration_ms": 100},
+                    {"phase": "parse", "duration_ms": 20},
+                    {"phase": "decision", "duration_ms": 70},
+                ],
+            },
+        )
+
+        nodes = {node.name: node for node in response.execution_trace.nodes}
+        self.assertEqual(nodes["qwen_parse"].duration_ms, 120)
+        self.assertEqual(nodes["qwen_decision"].duration_ms, 70)
+        self.assertEqual(nodes["project_context"].status, "success")
+        self.assertEqual(nodes["safety_gate"].status, "success")
+
     def test_trace_schema_rejects_unknown_fields(self) -> None:
         with self.assertRaises(ValidationError):
             ExecutionTraceView.model_validate({

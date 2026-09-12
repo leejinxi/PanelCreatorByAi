@@ -83,7 +83,10 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         trace = result["execution_trace"]
         self.assertEqual(
             [node["name"] for node in trace["nodes"]],
-            ["llm", "graph", "schema", "mcp", "provider"],
+            [
+                "qwen_parse", "policy_decision", "project_context",
+                "qwen_decision", "safety_gate", "provider",
+            ],
         )
         self.assertEqual(trace["provider"], "contract-mock")
         self.assertTrue(trace["simulated"])
@@ -97,9 +100,11 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             trace["mcp_response"]["object_id"],
             "mock-mcp-panel-001",
         )
-        mcp_node = next(node for node in trace["nodes"] if node["name"] == "mcp")
-        self.assertEqual(mcp_node["status"], "success")
-        self.assertIsNotNone(mcp_node["duration_ms"])
+        provider_node = next(
+            node for node in trace["nodes"] if node["name"] == "provider"
+        )
+        self.assertEqual(provider_node["status"], "success")
+        self.assertIsNotNone(provider_node["duration_ms"])
 
     async def test_real_stdio_reference_not_found(self) -> None:
         result = await self.run_output(model_output(reference_plane="MISSING"))
@@ -149,7 +154,7 @@ class WebMcpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     next(
                         node["status"]
                         for node in trace["nodes"]
-                        if node["name"] == "mcp"
+                        if node["name"] == "provider"
                     ),
                     "skipped",
                 )

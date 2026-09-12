@@ -73,6 +73,17 @@ class WebAgentDecisionFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trace["decision_steps"][1]["source"], "llm")
         self.assertEqual(trace["project_inspection"]["data_source_label"], "Mock Project Context")
         self.assertTrue(trace["safety_gate"]["authorized"])
+        self.assertEqual(
+            [node["name"] for node in trace["nodes"]],
+            [
+                "qwen_parse",
+                "policy_decision",
+                "project_context",
+                "qwen_decision",
+                "safety_gate",
+                "provider",
+            ],
+        )
         self.assertNotIn("llm_raw_output", json.dumps(payload))
 
     async def test_ambiguous_reference_exposes_candidates_without_cad(self) -> None:

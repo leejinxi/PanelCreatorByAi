@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Ship CAD Copilot 本地板架创建工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=agent-decision-v2">
-  <script src="/static/app.js?v=agent-decision-v2" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=agent-trace-v3">
+  <script src="/static/app.js?v=agent-trace-v3" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -124,26 +124,29 @@
         <section class="trace-console" aria-labelledby="trace-heading">
           <div class="trace-heading">
             <div>
-              <span class="eyebrow">LIVE EXECUTION TRACE</span>
-              <h3 id="trace-heading">真实组件执行路径</h3>
+              <span class="eyebrow">LIVE AGENT TRACE</span>
+              <h3 id="trace-heading">Agent 实际行为路径</h3>
             </div>
             <span id="trace-total">TOTAL —</span>
           </div>
           <ol class="trace-pipeline" id="trace-pipeline">
-            <li class="trace-node" data-trace="llm">
-              <span>01</span><strong>Local Qwen</strong><small>等待请求</small>
+            <li class="trace-node" data-trace="qwen_parse">
+              <span>01</span><strong>Qwen 参数解析</strong><small>等待请求</small>
             </li>
-            <li class="trace-node" data-trace="graph">
-              <span>02</span><strong>LangGraph</strong><small>等待路由</small>
+            <li class="trace-node" data-trace="policy_decision">
+              <span>02</span><strong>Agent 首次决策</strong><small>等待判断下一步</small>
             </li>
-            <li class="trace-node" data-trace="schema">
-              <span>03</span><strong>Pydantic Schema</strong><small>等待校验</small>
+            <li class="trace-node" data-trace="project_context">
+              <span>03</span><strong>Mock 工程查询</strong><small>等待只读查询</small>
             </li>
-            <li class="trace-node" data-trace="mcp">
-              <span>04</span><strong>MCP STDIO</strong><small>等待调用</small>
+            <li class="trace-node" data-trace="qwen_decision">
+              <span>04</span><strong>Qwen 结果评估</strong><small>等待工程观察</small>
+            </li>
+            <li class="trace-node" data-trace="safety_gate">
+              <span>05</span><strong>Safety Gate</strong><small>等待执行授权</small>
             </li>
             <li class="trace-node" data-trace="provider">
-              <span>05</span><strong>CAD Provider</strong><small>等待执行</small>
+              <span>06</span><strong>CAD Provider</strong><small>等待执行</small>
             </li>
           </ol>
         </section>

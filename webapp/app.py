@@ -120,28 +120,34 @@ def create_app(
                     "execution_trace": {
                         "nodes": [
                             {
-                                "name": "llm",
-                                "label": "Local Qwen",
+                                "name": "qwen_parse",
+                                "label": "Qwen 参数解析",
                                 "status": "error",
                                 "summary": "请求发生未预期异常",
                             },
                             {
-                                "name": "graph",
-                                "label": "LangGraph",
-                                "status": "error",
-                                "summary": "流程已安全停止",
+                                "name": "policy_decision",
+                                "label": "Agent 首次决策",
+                                "status": "skipped",
+                                "summary": "未形成首次决策",
                             },
                             {
-                                "name": "schema",
-                                "label": "Pydantic Schema",
+                                "name": "project_context",
+                                "label": "Mock 工程查询",
                                 "status": "skipped",
-                                "summary": "未完成校验",
+                                "summary": "未执行工程查询",
                             },
                             {
-                                "name": "mcp",
-                                "label": "MCP STDIO",
+                                "name": "qwen_decision",
+                                "label": "Qwen 结果评估",
                                 "status": "skipped",
-                                "summary": "未确认 MCP 调用",
+                                "summary": "未执行结果评估",
+                            },
+                            {
+                                "name": "safety_gate",
+                                "label": "Safety Gate",
+                                "status": "skipped",
+                                "summary": "未进入执行授权",
                             },
                             {
                                 "name": "provider",

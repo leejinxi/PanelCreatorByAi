@@ -115,7 +115,7 @@ function clearPreviousResultForExecution() {
   jsonDetails.open = false;
   jsonOutput.textContent = "";
   clearExecutionTrace();
-  const llmNode = traceElements.get("llm");
+  const llmNode = traceElements.get("qwen_parse");
   if (llmNode) {
     llmNode.classList.add("running");
     llmNode.querySelector("small").textContent = "正在调用本地模型…";

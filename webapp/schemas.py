@@ -57,7 +57,14 @@ class AgentStepView(BaseModel):
     status: StepStatus
 
 
-TraceNodeName = Literal["llm", "graph", "schema", "mcp", "provider"]
+TraceNodeName = Literal[
+    "qwen_parse",
+    "policy_decision",
+    "project_context",
+    "qwen_decision",
+    "safety_gate",
+    "provider",
+]
 TraceProvider = Literal["direct-mock", "contract-mock", "unconfigured"]
 
 

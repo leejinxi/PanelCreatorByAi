@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from agent.state import AgentState
 from agent.boundary_session import resolve_boundary_session, recover_missing_scalars
+from agent.execution_trace import llm_trace_phase
 from llm.qwen_client import LocalQwen, LocalQwenError
 from schemas.agent_action_schema import AgentActionPlan
 from schemas.agent_decision_schema import (
@@ -91,7 +92,8 @@ def parse_structure(state: AgentState) -> dict:
 """
 
     try:
-        result = llm.invoke(prompt)
+        with llm_trace_phase("parse"):
+            result = llm.invoke(prompt)
     except LocalQwenError as exc:
         return {
             "error": f"本地模型调用失败：{exc}",
@@ -396,7 +398,8 @@ def decide_after_inspection(state: AgentState) -> dict:
         )
     elif state.get("project_inspection") is not None:
         try:
-            raw = llm.invoke(_build_decision_prompt(state))
+            with llm_trace_phase("decision"):
+                raw = llm.invoke(_build_decision_prompt(state))
             parsed = json.loads(raw)
             llm_decision = AgentDecision.model_validate(parsed)
             if llm_decision.next_action == safe_decision.next_action:
