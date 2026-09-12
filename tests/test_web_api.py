@@ -111,6 +111,11 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("当前为 Direct Mock 模式，不经过 MCP tools/call", js_response.text)
         self.assertIn("MCP Provider 未返回可确认结果", js_response.text)
         self.assertNotIn('"MCP Provider 未返回结果。"', js_response.text)
+        self.assertIn("页面与执行 Trace 版本不一致，请刷新页面", js_response.text)
+        self.assertNotIn("if (!node) return;", js_response.text)
+
+        index_response = await self.client.get("/")
+        self.assertIn("agent-trace-v4", index_response.text)
 
     async def test_run_endpoint_returns_stable_response(self) -> None:
         response = await self.client.post(

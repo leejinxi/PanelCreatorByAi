@@ -280,11 +280,18 @@ function renderDecisionLoop(trace) {
 }
 
 function renderExecutionTrace(trace) {
-  const nodes = new Map((trace?.nodes || []).map((node) => [node.name, node]));
+  const receivedNodes = trace?.nodes || [];
+  const nodes = new Map(receivedNodes.map((node) => [node.name, node]));
   traceElements.forEach((element, name) => {
     const node = nodes.get(name);
     element.className = "trace-node";
-    if (!node) return;
+    if (!node) {
+      element.classList.add(receivedNodes.length ? "attention" : "skipped");
+      element.querySelector("small").textContent = receivedNodes.length
+        ? "页面与执行 Trace 版本不一致，请刷新页面"
+        : "本次未获得执行状态";
+      return;
+    }
     element.classList.add(node.status);
     element.querySelector("strong").textContent = node.label;
     const duration = node.duration_ms === null || node.duration_ms === undefined
