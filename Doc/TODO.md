@@ -1,8 +1,8 @@
 # AI Ship CAD Copilot TODO
 
-更新时间：2026-09-11
+更新时间：2026-09-12
 
-已提交代码基线：`ecfbf8e` — 完成 Agent 决策展示增强，并修正 Direct Mock 与 MCP 调用状态的页面语义。
+已提交代码基线：`2de3240` — 将透明执行台升级为六段 Agent 实际行为路径，并分别记录两次 Qwen 调用耗时。
 
 ## P0：板架边界必填与匹配（当前优先）
 
@@ -81,6 +81,7 @@
 
 ## P1：浏览器演示稳定性
 
+- [x] 将组件清单改为 `Qwen 参数解析 → Agent 首次决策 → Mock 工程查询 → Qwen 结果评估 → Safety Gate → CAD Provider` 行为链；分开展示解析与决策模型耗时。
 - [x] MCP Call Inspector 区分 Direct Mock 成功、Safety Gate 阻断、MCP 发送前拦截和已发送但无可确认响应，避免把“未经过 MCP”展示成 Provider 失败。
 - [x] 重新实现并验证可控 MCP Contract Mock 失败场景：CAD 不可用、定位面不存在。
 - [x] 请求期间锁定提交、新建会话和示例按钮。

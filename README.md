@@ -10,7 +10,7 @@
 - 使用仓库内 `mock_data/demo_project.json` 模拟当前工程对象目录，确定性区分唯一命中、未找到、歧义、不可用和角色不允许。
 - 查询前由安全策略决定先观察，查询后由 Qwen 在创建、澄清和停止中选择；模型异常或不安全建议由 fallback / safety override 接管。
 - 只有有效 `PanelRequest`、所有工程对象唯一匹配且最终决策允许时，Safety Gate 才授权 CAD Mock。
-- CLI 与浏览器共用同一 Graph；Web 展示两次决策、Mock 工程查询、安全门禁和 CAD 是否调用。
+- CLI 与浏览器共用同一 Graph；Web 以六段行为链展示两次 Qwen 调用、首次决策、Mock 工程查询、安全门禁和 CAD 是否调用，并分别显示参数解析与结果评估耗时。
 
 ## 本地运行
 
