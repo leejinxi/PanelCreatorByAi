@@ -2,13 +2,17 @@
 
 更新时间：2026-09-12
 
-代码基线：`0c2380d` — 为执行 Trace 增加新旧页面节点不匹配兜底，并升级静态资源版本避免继续命中旧脚本缓存。
+代码基线：`afae5a2` — 增加确定性板架创建前智能评审、显式邻近 Mock 样本、计划调整和决策护照。
 
-最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python -B -X utf8 run_tests.py`，共186项，185项通过，1项真实 Ollama E2E 按设计跳过。
+最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python run_tests.py`，共200项，199项通过，1项真实 Ollama E2E 按设计跳过。
 
 ## 当前阶段
 
-Agent 决策展示增强已接入主流程。用户必须提供至少1条合法边界；参数校验后 Agent 先决定查询 Mock 工程上下文，再根据定位面和边界的逐项查询结果选择创建、澄清或停止。Direct Mock 与 MCP STDIO Contract Mock 均仍只模拟创建，不创建真实 CAD 模型。
+Agent 决策展示增强和板架创建前智能评审已接入主流程。用户必须提供至少1条合法边界；参数校验后 Agent 先决定查询 Mock 工程上下文，对唯一解析的对象执行版本化 Demo 规则评审，再根据查询与评审结果选择创建、澄清或停止。Direct Mock 与 MCP STDIO Contract Mock 均仍只模拟创建，不创建真实 CAD 模型。
+
+评审规则包版本为 `demo-panel-review-1.0`，包含请求完整性、对象可执行性、定位面/边界对象重复、邻近板厚和材料差异，以及 CCS、结构强度、真实 CAD 几何三项能力边界。FR100 的邻近板架由 `demo_panel_context.json` 显式配置为 Mock 样本，不根据 FR 编号推断真实几何邻接。差异项只产生提醒并保留用户明确参数；定位面与边界解析到同一对象时命中 `PANEL-DEMO-003` 并停止创建。
+
+Web 已升级为七段行为链，新增创建前智能评审卡、显式邻近样本、原计划/调整后计划对照和板架决策护照。页面区分通过、提醒、阻断和未验证；决策护照记录最终动作、规则与工程版本、计划变化、能力边界和模拟对象 ID。
 
 页面的 MCP Call Inspector 已区分运行模式：Direct Mock 成功时显示 `DIRECT MOCK COMPLETE` 和 `RESULT · Direct Mock`，明确说明该模式不产生 MCP Request/Response；只有真实发出 MCP 请求但无响应时才显示“未返回可确认结果”。Safety Gate 阻断和发送前契约/配置拦截也使用各自文案。
 
@@ -20,13 +24,14 @@ PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认
 
 ## 主运行链路
 
-用户输入 → LocalQwen 提取动作与候选参数 → 原文边界解析与多轮重放 → `PanelRequest` 校验 → policy 首次决策 → `inspect_project_context` 查询 Demo JSON → Qwen 查询后决策（含 fallback / safety override）→ Safety Gate → CAD Tool → Direct Mock 或 MCP STDIO Contract Mock。
+用户输入 → LocalQwen 提取动作与候选参数 → 原文边界解析与多轮重放 → `PanelRequest` 校验 → policy 首次决策 → `inspect_project_context` 查询 Demo JSON → `design_review` 执行确定性评审 → Qwen 查询后决策（含 fallback / safety override）→ Safety Gate → CAD Tool → Direct Mock 或 MCP STDIO Contract Mock。
 
 - LLM 的 boundaries 输出不作为执行依据；边界只来自用户原文。
 - 当前查询仓库内精选 Demo 工程目录；已知 FR/SL/LV 名称规范化，目录外显式查询词仍保留并返回 `not_found`。
 - 定位面提取排除边界片段；用户没有提供定位面时不能从边界目标补出。
 - 名称或别名支持唯一、未找到、歧义、不可用和角色不允许五类结果；比较符不参与名称匹配。
 - 只有全部对象唯一匹配、最终动作为 `prepare_creation` 且未超过两步决策上限时，Safety Gate 才授权创建。
+- Safety Gate 还要求评审报告存在、无 blocker 且工程版本一致；warning 可携带提醒继续，不能改写 `PanelRequest`。
 - Web 只展示结构化观察、动作、依据和数据源，不展示隐藏思维链。
 
 ## 已实现边界行为
@@ -53,7 +58,8 @@ PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认
 ## 当前测试
 
 Python 3.11.15 / ai_cad_agent 下运行 python -B -X utf8 run_tests.py。
-本批186项：185项通过，1项真实 Ollama E2E 默认跳过。新增覆盖 Qwen 解析/决策阶段 Trace、分段耗时映射、六段 Agent 行为链和 Trace 页面版本不匹配提示；AgentDecision、Mock 目录匹配、Safety Gate、CLI/Web、边界多轮与 MCP STDIO 回归保持通过。
+本批200项：199项通过，1项真实 Ollama E2E 默认跳过。新增覆盖评审 Schema、规则和数据加载、邻近板厚/材料提醒、定位面与边界同对象阻断、评审版本不一致、Agent safety override、七段行为链、Web评审白名单和MCP STDIO兼容；既有 AgentDecision、边界多轮和 Provider 异常回归保持通过。
+另使用真实 Qwen + Direct Mock 浏览器验收：FR100 / 14mm / AH36 / >SL10 显示4项通过、1项提醒、3项未验证，保留14mm并生成模拟对象及决策护照；FR100 / 14mm / AH36 / >FR100 命中 `PANEL-DEMO-003`，计划调整为停止，CAD Provider 未调用。页面控制台无错误。
 显式设置 `RUN_LOCAL_E2E=1` 后，真实 Ollama 成功创建与 unsupported 两段端到端测试通过。
 另通过真实 Qwen 浏览器人工验收：初始“在第100肋位创建14mm厚AH36板架”要求补充边界；补充“边界 >SL10”后 Direct Mock 成功，FR100/14mm/AH36 保留。本轮另通过真实 Qwen + MCP 浏览器验收：无边界时未调用 MCP，补“边界 >SL10”后成功；请求版本0.2-poc，MCP耗时846ms，总耗时6061ms，返回mock-mcp-panel-001。真实 CAD 未验证。服务端空数组、非法符号、空目标、缺字段和多余字段拒绝已通过真实 STDIO 回归，超时和异常通过故障注入验证。
 历史基线：边界开发前118项；Step 1后132项；最低数量改为1条后135项。
@@ -80,4 +86,4 @@ python -X utf8 -m agent.main
 
 ## 下一步
 
-当前 Demo 主线已经完成。下一阶段应优先保持演示稳定，并在获得公司 CAD API 信息后用 MCP/C++ Provider 替换 `demo_project.json` 数据源；Graph、`AgentDecision`、Web 时间线与 Safety Gate 契约应保持稳定。真实工程接入前不扩展 RAG、多 Agent、自动几何推断或其他结构类型。
+当前 Demo 主线和板架智能评审增强已经完成。下一阶段应优先保持演示稳定，并在获得公司 CAD API 信息后用 MCP/C++ Provider 替换 `demo_project.json` 与邻近 Mock 样本数据源；Graph、`AgentDecision`、`DesignReviewReport`、Web 时间线与 Safety Gate 契约应保持稳定。真实工程接入前不扩展 RAG、多 Agent、自动几何推断或其他结构类型。
