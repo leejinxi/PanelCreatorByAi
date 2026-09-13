@@ -4,13 +4,13 @@
 
 代码基线：`f9792bf`；其后为未提交的错误治理演示修正。
 
-最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python run_tests.py`，共208项，207项通过，1项真实 Ollama E2E 按设计跳过。
+最新回归：在 Python 3.11.15 / `ai_cad_agent` 下运行 `python run_tests.py`，共212项，211项通过，1项真实 Ollama E2E 按设计跳过。
 
 ## 当前阶段
 
 当前产品演示以“全船结构模型错误治理”为唯一主入口，不再使用顶部业务 Tab。错误治理读取显式 Mock CAD 错误快照，由 Agent 展示问题归类与关联合并、风险分流、修复编排和结果收口；原板架创建页作为自动更新说明和单对象决策详情的下钻能力保留，当前仍不接入真实 CAD，也不会修改真实模型。
 
-`mock_data/demo_model_errors.json` 现在只保存36条未分组错误、对象父子引用、工程升级事件和CAD诊断候选，不再保存 `GROUP-A~D`、`is_root`、问题名称、处置路线或修复候选汇总。Agent分析代码沿错误对象父子关系找到13个主要错误对象，再依据错误码与诊断事实生成4个问题组、23个关联错误、处理路线和板架更新方案。因而页面分组是运行时分析结果，不是直接回显预置分组；该逻辑是可测试的确定性Agent策略，不是LLM自由猜测。
+`mock_data/demo_model_errors.json` 现在只保存36条未分组错误、对象父子引用、工程升级事件和CAD诊断候选，不再保存 `GROUP-A~D`、`is_root`、问题名称、处置路线或修复候选汇总。确定性分析代码沿错误对象父子关系找到13个主要错误对象，再依据错误码与诊断事实生成4个问题组、23个关联错误、修复候选和每组 `allowed_routes`。独立错误治理 LangGraph 调用 Qwen，结合“只分析 / 安全项自动处理 / 所有修改需确认”三类用户策略选择结构化路线；非法、越权或不可用时使用 fallback / safety override。Workflow 只根据复核后的计划路由，执行仍须逐组通过 Safety Gate。
 
 固定 Demo 快照含36个错误节点、4个问题组和23个关联错误。分流结果为：11个低风险自动重算、15个确认后板架更新、6个肘板边界失效转人工、4个几何内核异常转研发。点击“执行可恢复项”后模拟恢复26个错误，剩余10个形成集中工作清单。
 
@@ -38,7 +38,7 @@ PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认
 
 板架创建：用户输入 → LocalQwen 提取动作与候选参数 → 原文边界解析与多轮重放 → `PanelRequest` 校验 → policy 首次决策 → `inspect_project_context` 查询 Demo JSON → Qwen 查询后决策（含 fallback / safety override）→ Execution Preflight / Safety Gate → CAD Tool → Direct Mock 或 MCP STDIO Contract Mock。
 
-模型错误治理：读取未分组 Mock CAD 错误 → 问题归类与关联合并 → 四类风险分流 → 用户点击确认可恢复批次 → 模拟执行父对象优先的恢复计划 → 统计已恢复与剩余错误 → 可选进入单板架只读操作记录。
+模型错误治理：解析治理策略 → 读取未分组 Mock CAD 错误 → 问题归类与关联合并 → 确定性生成允许路线 → Qwen 动态选择 → Workflow 条件路由 → 用户确认 → 逐组 Safety Gate → 模拟执行父对象优先的恢复计划 → 结果收口。
 
 - LLM 的 boundaries 输出不作为执行依据；边界只来自用户原文。
 - 当前查询仓库内精选 Demo 工程目录；已知 FR/SL/LV 名称规范化，目录外显式查询词仍保留并返回 `not_found`。
@@ -72,7 +72,7 @@ PanelRequest 与 MCP 0.2-poc 已统一为至少一条边界数组。用户确认
 ## 当前测试
 
 Python 3.11.15 / ai_cad_agent 下运行 python -B -X utf8 run_tests.py。
-本批205项：204项通过，1项真实 Ollama E2E 默认跳过。当前新增覆盖错误快照加载、36/4/23统计、四类分流、26/10结果收口、只读板架操作快照和API 404受控错误。板架创建回归覆盖“不再执行旧评审、Safety Gate不依赖旧评审”，既有 AgentDecision、边界多轮和 Provider 异常测试保持通过。
+本批212项：211项通过，1项真实 Ollama E2E 默认跳过。当前新增覆盖未分组错误快照、运行时根因归组、36/4/23统计、用户策略改变低风险路线、Qwen合法选择、越权safety override、只分析禁止授权、显式确认后26/10结果收口、只读板架操作快照和API受控错误。板架创建、边界多轮和Provider异常测试保持通过。
 另使用真实 Qwen + Direct Mock 浏览器验收：FR100 / 14mm / AH36 / >SL10 显示4项通过、1项提醒、3项未验证，保留14mm并生成模拟对象及决策护照；FR100 / 14mm / AH36 / >FR100 命中 `PANEL-DEMO-003`，计划调整为停止，CAD Provider 未调用。页面控制台无错误。
 显式设置 `RUN_LOCAL_E2E=1` 后，真实 Ollama 成功创建与 unsupported 两段端到端测试通过。
 另通过真实 Qwen 浏览器人工验收：初始“在第100肋位创建14mm厚AH36板架”要求补充边界；补充“边界 >SL10”后 Direct Mock 成功，FR100/14mm/AH36 保留。本轮另通过真实 Qwen + MCP 浏览器验收：无边界时未调用 MCP，补“边界 >SL10”后成功；请求版本0.2-poc，MCP耗时846ms，总耗时6061ms，返回mock-mcp-panel-001。真实 CAD 未验证。服务端空数组、非法符号、空目标、缺字段和多余字段拒绝已通过真实 STDIO 回归，超时和异常通过故障注入验证。
@@ -100,4 +100,4 @@ python -X utf8 -m agent.main
 
 ## 下一步
 
-当前优先完成“错误治理主入口 → 自动更新说明/单板架详情”页面在常用分辨率下的最终视觉验收，并冻结错误治理 Demo 数据。后续真实开发应先与 CAD 团队确认错误快照、对象依赖、重算、更新和复核契约，再用 MCP/C++ Provider 替换 Mock；不要用 RAG 或 LLM 代替工程对象事实与几何校验。
+当前优先完成动态决策页面在常用分辨率下的视觉验收，并使用三类治理策略验证不同Workflow路径。本机真实Qwen调用当前返回Ollama HTTP 500，系统已按设计回退到确定性安全策略；需在演示前恢复本地模型服务。后续真实开发应先与CAD团队确认错误快照、对象依赖、重算、更新和复核契约，再用MCP/C++ Provider替换Mock；不要用RAG或LLM代替工程对象事实与几何校验。

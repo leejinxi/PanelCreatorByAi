@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Ship CAD Copilot 本地演示工作台">
   <title>AI Ship CAD Copilot</title>
-  <link rel="stylesheet" href="/static/styles.css?v=error-governance-v9">
-  <script src="/static/app.js?v=error-governance-v9" defer></script>
-  <script src="/static/error-governance.js?v=error-governance-v9" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=error-governance-v10">
+  <script src="/static/app.js?v=error-governance-v10" defer></script>
+  <script src="/static/error-governance.js?v=error-governance-v10" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -341,6 +341,14 @@
         <span class="eyebrow">MODEL ERROR GOVERNANCE</span>
         <h1>全船结构模型错误治理</h1>
         <p>CAD负责发现与标记错误；Agent读取36条未分组的Mock CAD错误，沿对象依赖识别主要问题、合并关联错误并生成处置计划。</p>
+        <label class="governance-policy" for="governance-strategy">
+          <span>本轮治理策略</span>
+          <select id="governance-strategy">
+            <option value="自动处理不改变设计意图的重算，其余让我确认">安全项自动处理</option>
+            <option value="只分析，不要修改模型">只分析，不修改</option>
+            <option value="所有修改都必须先确认">所有修改需确认</option>
+          </select>
+        </label>
         <div class="error-actions">
           <button class="secondary-button scenario-button" id="show-mock-scenario" type="button">了解 Mock 场景</button>
           <button class="primary-button" id="analyze-errors">分析当前工程错误</button>
@@ -351,9 +359,11 @@
       <ol class="governance-trace" id="governance-trace" aria-label="错误治理执行链路">
         <li data-governance-step="snapshot"><b>01</b><strong>读取错误快照</strong><small>CAD标记的工程事实</small></li>
         <li data-governance-step="root-cause"><b>02</b><strong>问题归类与关联合并</strong><small>避免重复处理子错误</small></li>
-        <li data-governance-step="route"><b>03</b><strong>风险分流</strong><small>自动 / 确认 / 人工 / 异常</small></li>
-        <li data-governance-step="repair"><b>04</b><strong>修复编排</strong><small>先父对象、后依赖对象</small></li>
-        <li data-governance-step="closure"><b>05</b><strong>结果收口</strong><small>复核并生成剩余清单</small></li>
+        <li data-governance-step="allowed-routes"><b>03</b><strong>允许路线</strong><small>确定性安全约束</small></li>
+        <li data-governance-step="agent-decision"><b>04</b><strong>Agent 动态选择</strong><small>结合本轮治理策略</small></li>
+        <li data-governance-step="route"><b>05</b><strong>Workflow 路由</strong><small>分析 / 确认 / Gate</small></li>
+        <li data-governance-step="repair"><b>06</b><strong>Safety Gate</strong><small>逐组执行授权</small></li>
+        <li data-governance-step="closure"><b>07</b><strong>结果收口</strong><small>模拟复核与剩余清单</small></li>
       </ol>
       <section class="error-dashboard">
         <div class="error-metrics" id="error-metrics"></div>

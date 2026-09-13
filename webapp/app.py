@@ -12,11 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from agent.main import run_panel_agent
 from tools.cad_tools import get_cad_backend_name
 from tools.model_error_tools import (
-    analyze_model_errors,
     build_panel_operation_details,
     execute_safe_repairs,
     ModelErrorProviderError,
 )
+from agent.model_error_graph import run_model_error_agent
 from schemas.model_error_schema import ErrorGovernanceReport, PanelOperationDetail
 from agent.execution_trace import begin_trace, end_trace, snapshot_trace
 from webapp.response_mapper import map_agent_state
@@ -25,11 +25,14 @@ from webapp.schemas import (
     AgentRunResponse,
     ExecutionMode,
     HealthResponse,
+    ModelErrorAnalyzeRequest,
+    ModelErrorRepairRequest,
 )
 
 
 logger = logging.getLogger(__name__)
 AgentRunner = Callable[[str], dict[str, Any]]
+GovernanceRunner = Callable[[str], ErrorGovernanceReport]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
@@ -42,6 +45,7 @@ def execution_mode() -> ExecutionMode:
 def create_app(
     *,
     agent_runner: AgentRunner = run_panel_agent,
+    governance_runner: GovernanceRunner = run_model_error_agent,
 ) -> FastAPI:
     """创建可注入 Agent Runner 的 Web 应用，便于测试和替换后端。"""
 
@@ -185,9 +189,13 @@ def create_app(
         "/api/model-errors/analyze",
         response_model=ErrorGovernanceReport,
     )
-    def analyze_errors() -> ErrorGovernanceReport:
+    def analyze_errors(
+        request: ModelErrorAnalyzeRequest | None = None,
+    ) -> ErrorGovernanceReport:
         try:
-            report = analyze_model_errors()
+            report = governance_runner(
+                request.message if request else "自动处理不改变设计意图的重算，其余让我确认"
+            )
         except ModelErrorProviderError as exc:
             raise HTTPException(
                 status_code=503,
@@ -202,11 +210,17 @@ def create_app(
         "/api/model-errors/repair/{task_id}",
         response_model=ErrorGovernanceReport,
     )
-    def repair_errors(task_id: str) -> ErrorGovernanceReport:
+    def repair_errors(
+        task_id: str,
+        request: ModelErrorRepairRequest | None = None,
+    ) -> ErrorGovernanceReport:
         report = error_tasks.get(task_id)
         if report is None:
             raise HTTPException(status_code=404, detail="错误治理任务不存在。")
-        completed = execute_safe_repairs(report)
+        completed = execute_safe_repairs(
+            report,
+            confirmed_group_ids=(request.confirmed_group_ids if request else []),
+        )
         error_tasks[task_id] = completed
         for detail in build_panel_operation_details(completed):
             operation_details[detail.operation_id] = detail

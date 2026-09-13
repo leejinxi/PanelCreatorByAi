@@ -117,7 +117,7 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("if (!node) return;", js_response.text)
 
         index_response = await self.client.get("/")
-        self.assertIn("error-governance-v9", index_response.text)
+        self.assertIn("error-governance-v10", index_response.text)
         self.assertIn("36条未分组的Mock CAD错误", index_response.text)
         self.assertIn('id="model-errors-tab"', index_response.text)
         self.assertIn('id="mock-scenario-dialog"', index_response.text)
@@ -125,6 +125,8 @@ class WebApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('class="product-tabs"', index_response.text)
         self.assertIn('id="automation-context"', index_response.text)
         self.assertIn("板架自动更新说明", index_response.text)
+        self.assertIn('id="governance-strategy"', index_response.text)
+        self.assertIn("Agent 动态选择", index_response.text)
 
     async def test_run_endpoint_returns_stable_response(self) -> None:
         response = await self.client.post(

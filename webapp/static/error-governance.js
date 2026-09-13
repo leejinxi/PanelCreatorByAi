@@ -3,6 +3,7 @@
   const errors = document.querySelector("#model-errors-tab");
   const analyze = document.querySelector("#analyze-errors");
   const repair = document.querySelector("#repair-errors");
+  const strategy = document.querySelector("#governance-strategy");
   const metrics = document.querySelector("#error-metrics");
   const groups = document.querySelector("#error-groups");
   const meta = document.querySelector("#error-task-meta");
@@ -85,7 +86,9 @@
 
   function render(data) {
     report = data;
-    meta.textContent = `${data.task_id} · ${data.project_name} · ${data.project_revision} · Mock CAD Error Snapshot`;
+    const intentLabel = data.intent.mode === "analyze_only" ? "只分析" :
+      data.intent.low_risk_policy === "require_confirmation" ? "所有修改需确认" : "安全项自动处理";
+    meta.textContent = `${data.task_id} · ${data.project_name} · ${data.project_revision} · ${intentLabel} · Mock CAD Error Snapshot`;
     const s = data.summary;
     const cards = [
       ["错误节点", s.total_errors], ["主要问题", s.root_groups], ["关联错误", s.cascade_errors],
@@ -101,10 +104,13 @@
         ? `<button class="detail-link" data-operation="${escapeHtml(group.operation_id)}">查看板架更新方案</button>` : "";
       const automation = group.candidate?.operation === "recompute"
         ? `<button class="detail-link automation-link" data-group="${escapeHtml(group.group_id)}">板架自动更新说明</button>` : "";
+      const allowed = group.allowed_routes.map(route => routeLabel[route]).join(" / ");
+      const sourceLabel = {llm: "Qwen", fallback: "安全回退", safety_override: "安全覆盖", policy: "确定性策略"}[group.decision_source];
       return `<article class="error-group route-${group.route}">
         <header><span>${escapeHtml(group.group_id)}</span><b>${routeLabel[group.route]}</b></header>
         <h3>${escapeHtml(group.title)}</h3><p>${escapeHtml(group.root_cause_code)}</p>
         <dl><div><dt>根对象</dt><dd>${roots}</dd></div><div><dt>影响对象</dt><dd>${group.objects.length}</dd></div><div><dt>级联错误</dt><dd>${cascade}</dd></div></dl>
+        <div class="decision-summary"><b>允许路线</b><span>${escapeHtml(allowed)}</span><b>Agent选择</b><span>${escapeHtml(routeLabel[group.route])} · ${escapeHtml(sourceLabel)}</span><small>${escapeHtml(group.decision_observation)}</small></div>
         <ul>${group.evidence.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="group-actions">${detail}${automation}</div></article>`;
     }).join("");
     document.querySelectorAll(".detail-link").forEach(button => button.addEventListener("click", () => {
@@ -118,8 +124,8 @@
         meta.textContent = `自动更新说明读取失败：${error.message}`;
       });
     }));
-    setGovernanceProgress(data.status === "completed" ? 4 : 2);
-    repair.disabled = data.status === "completed";
+    setGovernanceProgress(data.status === "completed" ? 6 : 4);
+    repair.disabled = data.status === "completed" || data.intent.mode === "analyze_only";
     if (data.status === "completed") {
       closure.hidden = false;
       closureContent.innerHTML = `<strong>处理前 ${s.total_errors} 个错误，恢复 ${data.resolved_error_ids.length} 个，剩余 ${data.remaining_error_ids.length} 个。</strong><p>剩余工作：人工重选6个肘板边界并预览形体；提交4个几何内核异常对象。</p>`;
@@ -175,14 +181,20 @@
   analyze.addEventListener("click", async () => {
     analyze.disabled = true; meta.textContent = "正在读取Mock CAD错误快照…";
     setGovernanceProgress(-1, 0);
-    try { render(await fetchJson("/api/model-errors/analyze", {method: "POST"})); }
+    try { render(await fetchJson("/api/model-errors/analyze", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: strategy.value})
+    })); }
     catch (error) { meta.textContent = `分析失败：${error.message}`; setGovernanceProgress(-1); }
     finally { analyze.disabled = false; }
   });
   repair.addEventListener("click", async () => {
-    if (!report) return; repair.disabled = true; setGovernanceProgress(2, 3);
-    try { render(await fetchJson(`/api/model-errors/repair/${report.task_id}`, {method: "POST"})); }
-    catch (error) { meta.textContent = `修复编排失败：${error.message}`; repair.disabled = false; setGovernanceProgress(2); }
+    if (!report) return; repair.disabled = true; setGovernanceProgress(4, 5);
+    try { render(await fetchJson(`/api/model-errors/repair/${report.task_id}`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({confirmed_group_ids: report.confirmation_required_group_ids})
+    })); }
+    catch (error) { meta.textContent = `修复编排失败：${error.message}`; repair.disabled = false; setGovernanceProgress(4); }
   });
 
   const initialQuery = initialHash.split("?", 2)[1];

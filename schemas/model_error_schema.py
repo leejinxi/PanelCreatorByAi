@@ -10,6 +10,12 @@ RepairOperation = Literal[
 RepairRoute = Literal[
     "auto_execute", "confirm_then_execute", "manual", "provider_issue"
 ]
+DecisionSource = Literal["policy", "llm", "fallback", "safety_override"]
+GovernanceMode = Literal["analyze_only", "execute_allowed"]
+LowRiskPolicy = Literal["allow_auto_execute", "require_confirmation"]
+WorkflowNextStep = Literal[
+    "report_only", "request_confirmation", "repair_safety_gate"
+]
 
 
 class ErrorDetails(BaseModel):
@@ -70,6 +76,51 @@ class RepairCandidate(BaseModel):
     target_schema_version: str | None = None
 
 
+class GovernanceIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: GovernanceMode
+    low_risk_policy: LowRiskPolicy
+
+
+class RepairRouteDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group_id: str
+    route: RepairRoute
+    candidate_id: str | None = None
+    reason_code: str
+    observation: str = Field(min_length=1)
+    evidence: list[str] = Field(default_factory=list, max_length=5)
+    requires_confirmation: bool
+
+
+class RepairDecisionRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sequence: int = Field(ge=1)
+    source: DecisionSource
+    decision: RepairRouteDecision
+
+
+class RepairPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str
+    expected_project_revision: str
+    intent: GovernanceIntent
+    decisions: list[RepairRouteDecision] = Field(min_length=1)
+
+
+class RepairAuthorization(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group_id: str
+    authorized: bool
+    reason_code: str
+    checked_project_revision: str
+
+
 class ErrorGroup(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -79,7 +130,12 @@ class ErrorGroup(BaseModel):
     root_object_ids: list[str] = Field(min_length=1)
     objects: list[ErrorObject] = Field(min_length=1)
     evidence: list[str]
+    allowed_routes: list[RepairRoute] = Field(min_length=1)
     route: RepairRoute
+    decision_source: DecisionSource = "policy"
+    decision_reason_code: str
+    decision_observation: str
+    requires_confirmation: bool = False
     candidate: RepairCandidate | None = None
     operation_id: str | None = None
 
@@ -132,15 +188,21 @@ class ErrorGovernanceReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
-    status: Literal["analyzed", "completed"]
+    status: Literal["analyzed", "awaiting_confirmation", "completed"]
     project_id: str
     project_name: str
     project_revision: str
     data_source_label: Literal["Mock CAD Error Snapshot"] = "Mock CAD Error Snapshot"
     summary: ErrorGovernanceSummary
+    intent: GovernanceIntent
+    workflow_next_step: WorkflowNextStep
     groups: list[ErrorGroup]
+    decision_history: list[RepairDecisionRecord] = Field(default_factory=list)
+    confirmation_required_group_ids: list[str] = Field(default_factory=list)
+    authorization_results: list[RepairAuthorization] = Field(default_factory=list)
     resolved_error_ids: list[str] = Field(default_factory=list)
     remaining_error_ids: list[str] = Field(default_factory=list)
+    simulated: Literal[True] = True
 
 
 class PanelUpdateRequestSnapshot(BaseModel):

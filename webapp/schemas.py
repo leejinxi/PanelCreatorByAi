@@ -39,6 +39,34 @@ class AgentRunRequest(BaseModel):
         return normalized
 
 
+class ModelErrorAnalyzeRequest(BaseModel):
+    """错误治理 Agent 的本轮目标与授权偏好。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(
+        default="自动处理不改变设计意图的重算，其余让我确认",
+        min_length=1,
+        max_length=500,
+    )
+
+    @field_validator("message")
+    @classmethod
+    def normalize_message(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("治理指令不能为空")
+        return normalized
+
+
+class ModelErrorRepairRequest(BaseModel):
+    """用户明确确认后提交的错误组范围。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirmed_group_ids: list[str] = Field(default_factory=list)
+
+
 class HealthResponse(BaseModel):
     """轻量服务状态；不主动探测 LLM 或 CAD。"""
 

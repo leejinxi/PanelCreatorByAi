@@ -8,11 +8,16 @@ from schemas.model_error_schema import (
     ErrorGovernanceSummary,
     ErrorGroup,
     ErrorObject,
+    GovernanceIntent,
     ModelErrorSnapshot,
     PanelOperationDetail,
     PanelUpdateRequestSnapshot,
     ProviderDiagnostic,
+    RepairAuthorization,
     RepairCandidate,
+    RepairDecisionRecord,
+    RepairPlan,
+    RepairRouteDecision,
 )
 
 
@@ -111,19 +116,43 @@ def _candidate_for_group(
     )
 
 
-def _route_for_group(cause: str, candidate: RepairCandidate | None) -> str:
+def parse_governance_intent(user_message: str) -> GovernanceIntent:
+    """将演示中的治理授权表达转换为保守、可测试的策略。"""
+    normalized = "".join(user_message.lower().split())
+    if any(token in normalized for token in ("只分析", "不要修改", "不执行")):
+        return GovernanceIntent(
+            mode="analyze_only",
+            low_risk_policy="require_confirmation",
+        )
+    if any(token in normalized for token in ("所有修改", "全部修改", "都必须确认", "全部确认")):
+        return GovernanceIntent(
+            mode="execute_allowed",
+            low_risk_policy="require_confirmation",
+        )
+    return GovernanceIntent(
+        mode="execute_allowed",
+        low_risk_policy="allow_auto_execute",
+    )
+
+
+def derive_allowed_routes(
+    cause: str,
+    candidate: RepairCandidate | None,
+) -> list[str]:
+    """根据 CAD 事实给出 Agent 可选择的最大安全路线集合。"""
     if cause == "GEOMETRY_KERNEL_ERROR":
-        return "provider_issue"
+        return ["provider_issue"]
     if candidate is None or candidate.provider_validation == "failed":
-        return "provider_issue"
+        return ["provider_issue"]
     if cause == "BRACKET_BOUNDARY_INVALID_AFTER_SUPPORT_UPDATE":
-        return "manual"
+        return ["manual"]
     if (
         cause == "PANEL_RECOMPUTE_REQUIRED"
         and candidate.provider_validation == "passed"
+        and candidate.ambiguity_count == 0
         and not candidate.changes_design_intent
     ):
-        return "auto_execute"
+        return ["auto_execute", "confirm_then_execute", "manual"]
     if (
         cause == "PANEL_BOUNDARY_SCHEMA_MIGRATION_INCOMPLETE"
         and candidate.provider_validation == "passed"
@@ -131,8 +160,54 @@ def _route_for_group(cause: str, candidate: RepairCandidate | None) -> str:
         and len(candidate.candidate_object_ids) == 1
         and not candidate.changes_design_intent
     ):
-        return "confirm_then_execute"
-    return "manual"
+        return ["confirm_then_execute", "manual"]
+    return ["manual"]
+
+
+def _fallback_decision(
+    group_id: str,
+    cause: str,
+    candidate: RepairCandidate | None,
+    allowed_routes: list[str],
+    intent: GovernanceIntent,
+) -> RepairRouteDecision:
+    if "provider_issue" in allowed_routes:
+        route = "provider_issue"
+        reason = "PROVIDER_INTERNAL_ERROR"
+        observation = "Provider 未给出可安全执行的受控修复结果。"
+    elif allowed_routes == ["manual"]:
+        route = "manual"
+        reason = "DESIGN_INTENT_MAY_CHANGE"
+        observation = "当前问题需要设计人员选择或复核，不能自动处理。"
+    elif (
+        "auto_execute" in allowed_routes
+        and intent.mode == "execute_allowed"
+        and intent.low_risk_policy == "allow_auto_execute"
+    ):
+        route = "auto_execute"
+        reason = "LOW_RISK_RECOMPUTE"
+        observation = "Provider 候选唯一且预校验通过，本轮授权允许低风险重算。"
+    else:
+        route = "confirm_then_execute"
+        reason = (
+            "ANALYSIS_ONLY"
+            if intent.mode == "analyze_only"
+            else "USER_CONFIRMATION_REQUIRED"
+        )
+        observation = "修复候选有效，但当前治理策略要求执行前确认。"
+    return RepairRouteDecision(
+        group_id=group_id,
+        route=route,
+        candidate_id=candidate.candidate_id if candidate else None,
+        reason_code=reason,
+        observation=observation,
+        evidence=[
+            f"cause={cause}",
+            f"allowed_routes={','.join(allowed_routes)}",
+            f"provider_validation={candidate.provider_validation if candidate else 'missing'}",
+        ],
+        requires_confirmation=route == "confirm_then_execute",
+    )
 
 
 def _evidence_for_group(
@@ -180,7 +255,10 @@ def _evidence_for_group(
     ]
 
 
-def group_model_errors(snapshot: ModelErrorSnapshot) -> list[ErrorGroup]:
+def group_model_errors(
+    snapshot: ModelErrorSnapshot,
+    intent: GovernanceIntent | None = None,
+) -> list[ErrorGroup]:
     """从未分组CAD错误、父子关系和诊断候选生成问题组与处理路线。"""
     errors_by_id = {item.object_id: item for item in snapshot.errors}
     root_for_error = {
@@ -195,6 +273,10 @@ def group_model_errors(snapshot: ModelErrorSnapshot) -> list[ErrorGroup]:
             raise ModelErrorProviderError(f"无法归类错误对象：{root_id}")
         roots_by_cause[cause].append(root_id)
 
+    effective_intent = intent or GovernanceIntent(
+        mode="execute_allowed",
+        low_risk_policy="allow_auto_execute",
+    )
     groups: list[ErrorGroup] = []
     for index, cause in enumerate(CAUSE_ORDER):
         root_ids = roots_by_cause.get(cause, [])
@@ -209,6 +291,14 @@ def group_model_errors(snapshot: ModelErrorSnapshot) -> list[ErrorGroup]:
         ]
         diagnostics = _diagnostics_for_roots(root_ids, snapshot.diagnostics)
         candidate = _candidate_for_group(group_id, cause, diagnostics, snapshot)
+        allowed_routes = derive_allowed_routes(cause, candidate)
+        decision = _fallback_decision(
+            group_id,
+            cause,
+            candidate,
+            allowed_routes,
+            effective_intent,
+        )
         operation_id = None
         if candidate and candidate.operation == "update_panel" and len(root_ids) == 1:
             suffix = root_ids[0].removeprefix("PANEL-FR")
@@ -220,16 +310,142 @@ def group_model_errors(snapshot: ModelErrorSnapshot) -> list[ErrorGroup]:
             root_object_ids=root_ids,
             objects=objects,
             evidence=_evidence_for_group(cause, objects, candidate),
-            route=_route_for_group(cause, candidate),
+            allowed_routes=allowed_routes,
+            route=decision.route,
+            decision_source="policy",
+            decision_reason_code=decision.reason_code,
+            decision_observation=decision.observation,
+            requires_confirmation=decision.requires_confirmation,
             candidate=candidate,
             operation_id=operation_id,
         ))
     return groups
 
 
-def analyze_model_errors() -> ErrorGovernanceReport:
+def apply_repair_plan(
+    groups: list[ErrorGroup],
+    plan: RepairPlan,
+    *,
+    source: str,
+) -> tuple[list[ErrorGroup], list[RepairDecisionRecord]]:
+    """复核 Agent 计划；越界时只覆盖对应问题组。"""
+    by_group = {item.group_id: item for item in plan.decisions}
+    duplicate_ids = len(by_group) != len(plan.decisions)
+    known_ids = {group.group_id for group in groups}
+    has_unknown_ids = not set(by_group).issubset(known_ids)
+    output: list[ErrorGroup] = []
+    history: list[RepairDecisionRecord] = []
+    for sequence, group in enumerate(groups, start=1):
+        proposed = by_group.get(group.group_id)
+        valid = (
+            not duplicate_ids
+            and not has_unknown_ids
+            and proposed is not None
+            and proposed.route in group.allowed_routes
+            and proposed.candidate_id == (
+                group.candidate.candidate_id if group.candidate else None
+            )
+            and proposed.requires_confirmation
+            == (proposed.route == "confirm_then_execute")
+            and not (
+                plan.intent.low_risk_policy == "require_confirmation"
+                and proposed.route == "auto_execute"
+            )
+            and not (
+                plan.intent.mode == "analyze_only"
+                and proposed.route == "auto_execute"
+            )
+        )
+        if valid:
+            decision = proposed
+            decision_source = source
+        else:
+            decision = _fallback_decision(
+                group.group_id,
+                group.root_cause_code,
+                group.candidate,
+                group.allowed_routes,
+                plan.intent,
+            )
+            decision_source = "safety_override"
+        output.append(group.model_copy(update={
+            "route": decision.route,
+            "decision_source": decision_source,
+            "decision_reason_code": decision.reason_code,
+            "decision_observation": decision.observation,
+            "requires_confirmation": decision.requires_confirmation,
+        }))
+        history.append(RepairDecisionRecord(
+            sequence=sequence,
+            source=decision_source,
+            decision=decision,
+        ))
+    return output, history
+
+
+def analyze_model_errors(
+    user_message: str = "自动处理不改变设计意图的重算，其余让我确认",
+    *,
+    plan: RepairPlan | None = None,
+    decision_source: str = "policy",
+) -> ErrorGovernanceReport:
     snapshot = load_model_error_snapshot()
-    groups = group_model_errors(snapshot)
+    intent = parse_governance_intent(user_message)
+    groups = group_model_errors(snapshot, intent)
+    if plan is not None:
+        if (
+            plan.project_id != snapshot.project_id
+            or plan.expected_project_revision != snapshot.project_revision
+            or plan.intent != intent
+        ):
+            groups = [
+                group.model_copy(update={"decision_source": "safety_override"})
+                for group in groups
+            ]
+            history = [
+                RepairDecisionRecord(
+                    sequence=index,
+                    source="safety_override",
+                    decision=RepairRouteDecision(
+                        group_id=group.group_id,
+                        route=group.route,
+                        candidate_id=(group.candidate.candidate_id if group.candidate else None),
+                        reason_code=group.decision_reason_code,
+                        observation=group.decision_observation,
+                        evidence=group.evidence[:5],
+                        requires_confirmation=group.requires_confirmation,
+                    ),
+                )
+                for index, group in enumerate(groups, start=1)
+            ]
+        else:
+            groups, history = apply_repair_plan(
+                groups,
+                plan,
+                source=decision_source,
+            )
+    else:
+        if decision_source != "policy":
+            groups = [
+                group.model_copy(update={"decision_source": decision_source})
+                for group in groups
+            ]
+        history = [
+            RepairDecisionRecord(
+                sequence=index,
+                source=decision_source,
+                decision=RepairRouteDecision(
+                    group_id=group.group_id,
+                    route=group.route,
+                    candidate_id=(group.candidate.candidate_id if group.candidate else None),
+                    reason_code=group.decision_reason_code,
+                    observation=group.decision_observation,
+                    evidence=group.evidence[:5],
+                    requires_confirmation=group.requires_confirmation,
+                ),
+            )
+            for index, group in enumerate(groups, start=1)
+        ]
     errors = snapshot.errors
     roots = {root_id for group in groups for root_id in group.root_object_ids}
     by_route = {
@@ -251,26 +467,75 @@ def analyze_model_errors() -> ErrorGovernanceReport:
             manual_required=by_route["manual"],
             provider_issues=by_route["provider_issue"],
         ),
+        intent=intent,
+        workflow_next_step=(
+            "report_only"
+            if intent.mode == "analyze_only"
+            else "request_confirmation"
+            if any(group.requires_confirmation for group in groups)
+            else "repair_safety_gate"
+        ),
         groups=groups,
+        decision_history=history,
+        confirmation_required_group_ids=[
+            group.group_id for group in groups if group.requires_confirmation
+        ],
         remaining_error_ids=[item.object_id for item in errors],
     )
 
 
-def execute_safe_repairs(report: ErrorGovernanceReport) -> ErrorGovernanceReport:
-    resolved = [
-        item.object_id
-        for group in report.groups
-        if group.route in {"auto_execute", "confirm_then_execute"}
-        for item in group.objects
-    ]
-    remaining = [
-        item.object_id
-        for group in report.groups
-        if group.route in {"manual", "provider_issue"}
-        for item in group.objects
-    ]
+def execute_safe_repairs(
+    report: ErrorGovernanceReport,
+    confirmed_group_ids: list[str] | None = None,
+) -> ErrorGovernanceReport:
+    confirmed = set(confirmed_group_ids or [])
+    authorizations: list[RepairAuthorization] = []
+    resolved: list[str] = []
+    remaining: list[str] = []
+    unconfirmed = False
+    for group in report.groups:
+        candidate = group.candidate
+        candidate_valid = (
+            candidate is not None
+            and candidate.provider_validation == "passed"
+            and candidate.ambiguity_count == 0
+        )
+        authorized = False
+        reason = "ROUTE_NOT_EXECUTABLE"
+        if report.intent.mode == "analyze_only":
+            reason = "ANALYSIS_ONLY"
+        elif group.route == "auto_execute" and candidate_valid:
+            authorized = True
+            reason = "LOW_RISK_POLICY_AUTHORIZED"
+        elif group.route == "confirm_then_execute" and candidate_valid:
+            if group.group_id in confirmed:
+                authorized = True
+                reason = "USER_CONFIRMATION_AUTHORIZED"
+            else:
+                unconfirmed = True
+                reason = "USER_CONFIRMATION_REQUIRED"
+        elif group.route in {"auto_execute", "confirm_then_execute"}:
+            reason = "CANDIDATE_NOT_VALID"
+        authorizations.append(RepairAuthorization(
+            group_id=group.group_id,
+            authorized=authorized,
+            reason_code=reason,
+            checked_project_revision=report.project_revision,
+        ))
+        target = resolved if authorized else remaining
+        target.extend(item.object_id for item in group.objects)
     return report.model_copy(update={
-        "status": "completed",
+        "status": (
+            "analyzed"
+            if report.intent.mode == "analyze_only"
+            else "awaiting_confirmation" if unconfirmed else "completed"
+        ),
+        "workflow_next_step": (
+            "report_only"
+            if report.intent.mode == "analyze_only"
+            else "request_confirmation" if unconfirmed else "repair_safety_gate"
+        ),
+        "authorization_results": authorizations,
         "resolved_error_ids": resolved,
         "remaining_error_ids": remaining,
     })
